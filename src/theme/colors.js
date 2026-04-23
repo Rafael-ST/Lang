@@ -1,0 +1,17 @@
+export const colors = {
+  background: "#f4efe6",
+  surface: "#ffffff",
+  surfaceMuted: "#fffaf3",
+  badgeBackground: "#d9c7a7",
+  badgeText: "#5b4632",
+  textPrimary: "#2f2419",
+  textSecondary: "#4d3d2d",
+  textMutedDark: "#6b5b4d",
+  textMuted: "#8f8578",
+  textButtonSecondary: "#3f3226",
+  border: "#e3d8ca",
+  borderStrong: "#d6cabd",
+  link: "#7a5c3b",
+  shadow: "#7b6a58",
+  error: "#b4473f",
+};

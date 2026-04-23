@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Lang",
+    "slug": "lang-login",
+    "scheme": "lang",
+    "android": {
+      "package": "com.rafael.lang"
+    },
+    "ios": {
+      "bundleIdentifier": "com.rafael.lang"
+    },
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f4efe6"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-web-browser",
+      "expo-asset"
+    ],
+    "extra": {
+      "googleAuth": {
+        "androidClientId": "46582084112-4v43hbjpnigq5d0qeod0olsdh8mleas8.apps.googleusercontent.com",
+        "iosClientId": "46582084112-5abjvbbbrfubi6otkkmg2cvm4kcf3k46.apps.googleusercontent.com",
+        "webClientId": "46582084112-mp2tu185jebr279c5sjq91u6kdpekkcu.apps.googleusercontent.com"
+      }
+    }
+  }
+}
