@@ -2,6 +2,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
@@ -13,10 +14,16 @@ export default function ScreenContainer({ children, keyboard = false, contentSty
     <SafeAreaView style={styles.safeArea}>
       {keyboard ? (
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={[styles.container, contentStyle]}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.container}
         >
-          {children}
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, contentStyle]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
         </KeyboardAvoidingView>
       ) : (
         <View style={[styles.container, contentStyle]}>{children}</View>
@@ -32,6 +39,10 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
     backgroundColor: colors.background,
   },
 });

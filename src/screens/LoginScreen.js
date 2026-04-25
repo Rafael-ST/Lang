@@ -11,6 +11,7 @@ import { colors, shadows } from "../theme";
 export default function LoginScreen({
   onForgotPasswordPress,
   onLoginPress,
+  onRegisterPress,
 }) {
   const { authError, isConfigured, isSigningIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
@@ -64,6 +65,10 @@ export default function LoginScreen({
 
         <Pressable style={styles.linkButton} onPress={onForgotPasswordPress}>
           <Text style={styles.linkText}>Esqueceu a senha?</Text>
+        </Pressable>
+
+        <Pressable style={styles.secondaryLinkButton} onPress={onRegisterPress}>
+          <Text style={styles.secondaryLinkText}>Criar uma conta</Text>
         </Pressable>
 
         <View style={styles.dividerRow}>
@@ -136,6 +141,15 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: colors.link,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  secondaryLinkButton: {
+    alignSelf: "center",
+    marginTop: 12,
+  },
+  secondaryLinkText: {
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: "700",
   },

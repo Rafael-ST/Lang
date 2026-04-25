@@ -5,6 +5,7 @@ import { useAuth } from "../features/auth/context/AuthContext";
 import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
 import LoggedScreen from "../screens/LoggedScreen";
 import LoginScreen from "../screens/LoginScreen";
+import RegisterScreen from "../screens/RegisterScreen";
 
 export default function AppNavigator() {
   const { isLoading, user } = useAuth();
@@ -27,10 +28,16 @@ export default function AppNavigator() {
         <LoggedScreen onLogout={() => setIsManualLoggedIn(false)} />
       ) : screen === "forgot-password" ? (
         <ForgotPasswordScreen onBack={() => setScreen("login")} />
+      ) : screen === "register" ? (
+        <RegisterScreen
+          onBack={() => setScreen("login")}
+          onRegisterPress={() => setIsManualLoggedIn(true)}
+        />
       ) : (
         <LoginScreen
           onForgotPasswordPress={() => setScreen("forgot-password")}
           onLoginPress={() => setIsManualLoggedIn(true)}
+          onRegisterPress={() => setScreen("register")}
         />
       )}
     </>
