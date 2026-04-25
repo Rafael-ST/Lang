@@ -4,14 +4,16 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import AppButton from "../components/AppButton";
 import AppTextField from "../components/AppTextField";
 import ScreenContainer from "../components/ScreenContainer";
-import { colors, shadows } from "../theme";
+import { useTheme } from "../theme";
 
 export default function RegisterScreen({ onBack, onRegisterPress }) {
+  const { colors, shadows } = useTheme();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [registerError, setRegisterError] = useState("");
+  const styles = createStyles(colors, shadows);
 
   function handleRegisterPress() {
     const trimmedName = name.trim();
@@ -105,7 +107,8 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors, shadows) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: 24,
     paddingVertical: 32,
@@ -161,4 +164,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "center",
   },
-});
+  });
+}

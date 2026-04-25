@@ -1,4 +1,4 @@
-export const colors = {
+export const lightColors = {
   background: "#f4efe6",
   surface: "#ffffff",
   surfaceMuted: "#fffaf3",
@@ -15,3 +15,23 @@ export const colors = {
   shadow: "#7b6a58",
   error: "#b4473f",
 };
+
+export const darkColors = {
+  background: "#12100e",
+  surface: "#1d1915",
+  surfaceMuted: "#252019",
+  badgeBackground: "#3c3126",
+  badgeText: "#ead7bd",
+  textPrimary: "#f6efe6",
+  textSecondary: "#ddcab3",
+  textMutedDark: "#b9a895",
+  textMuted: "#8f8172",
+  textButtonSecondary: "#f0e4d5",
+  border: "#3d352d",
+  borderStrong: "#51473d",
+  link: "#d9b982",
+  shadow: "#000000",
+  error: "#ff8a80",
+};
+
+export const colors = lightColors;

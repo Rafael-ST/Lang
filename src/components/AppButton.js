@@ -1,8 +1,11 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 
-import { colors, shadows } from "../theme";
+import { useTheme } from "../theme";
 
 export default function AppButton({ label, onPress, variant = "primary" }) {
+  const { colors, shadows } = useTheme();
+  const styles = createStyles(colors, shadows);
+
   return (
     <Pressable
       onPress={onPress}
@@ -20,7 +23,8 @@ export default function AppButton({ label, onPress, variant = "primary" }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors, shadows) {
+  return StyleSheet.create({
   button: {
     height: 56,
     borderRadius: 18,
@@ -38,4 +42,5 @@ const styles = StyleSheet.create({
   primaryText: {
     color: colors.surfaceMuted,
   },
-});
+  });
+}

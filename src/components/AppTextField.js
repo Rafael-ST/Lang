@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
-import { colors } from "../theme";
+import { useTheme } from "../theme";
 
 export default function AppTextField({
   label,
@@ -13,8 +13,10 @@ export default function AppTextField({
   value,
   onChangeText,
 }) {
+  const { colors } = useTheme();
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const isSecureField = Boolean(secureTextEntry);
+  const styles = createStyles(colors);
 
   return (
     <View style={styles.fieldGroup}>
@@ -48,7 +50,8 @@ export default function AppTextField({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   fieldGroup: {
     marginBottom: 18,
   },
@@ -83,4 +86,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-});
+  });
+}

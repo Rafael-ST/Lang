@@ -1,13 +1,16 @@
 import { Image, Pressable, StyleSheet, Text } from "react-native";
 
 import { googleIcon } from "../constants/assets";
-import { colors } from "../theme";
+import { useTheme } from "../theme";
 
 export default function GoogleButton({
   disabled = false,
   label = "Entrar com Google",
   onPress,
 }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   return (
     <Pressable
       style={[styles.button, disabled && styles.buttonDisabled]}
@@ -20,7 +23,8 @@ export default function GoogleButton({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   button: {
     height: 56,
     borderRadius: 18,
@@ -45,4 +49,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-});
+  });
+}

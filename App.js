@@ -1,10 +1,13 @@
 import AppNavigator from "./src/app/AppNavigator";
 import { AuthProvider } from "./src/features/auth/context/AuthContext";
+import { ThemeProvider } from "./src/theme";
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

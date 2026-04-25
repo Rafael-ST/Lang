@@ -7,9 +7,12 @@ import {
   View,
 } from "react-native";
 
-import { colors } from "../theme";
+import { useTheme } from "../theme";
 
 export default function ScreenContainer({ children, keyboard = false, contentStyle }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {keyboard ? (
@@ -32,7 +35,8 @@ export default function ScreenContainer({ children, keyboard = false, contentSty
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -45,4 +49,5 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: colors.background,
   },
-});
+  });
+}

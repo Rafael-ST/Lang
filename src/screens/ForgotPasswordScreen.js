@@ -4,10 +4,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import AppButton from "../components/AppButton";
 import AppTextField from "../components/AppTextField";
 import ScreenContainer from "../components/ScreenContainer";
-import { colors, shadows } from "../theme";
+import { useTheme } from "../theme";
 
 export default function ForgotPasswordScreen({ onBack }) {
+  const { colors, shadows } = useTheme();
   const [email, setEmail] = useState("");
+  const styles = createStyles(colors, shadows);
 
   return (
     <ScreenContainer keyboard contentStyle={styles.container}>
@@ -39,7 +41,8 @@ export default function ForgotPasswordScreen({ onBack }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors, shadows) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: 24,
     paddingVertical: 32,
@@ -88,4 +91,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
-});
+  });
+}

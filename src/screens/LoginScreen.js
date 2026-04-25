@@ -6,7 +6,7 @@ import AppTextField from "../components/AppTextField";
 import GoogleButton from "../components/GoogleButton";
 import ScreenContainer from "../components/ScreenContainer";
 import { useAuth } from "../features/auth/context/AuthContext";
-import { colors, shadows } from "../theme";
+import { useTheme } from "../theme";
 
 export default function LoginScreen({
   onForgotPasswordPress,
@@ -14,9 +14,11 @@ export default function LoginScreen({
   onRegisterPress,
 }) {
   const { authError, isConfigured, isSigningIn, signInWithGoogle } = useAuth();
+  const { colors, shadows } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [manualLoginError, setManualLoginError] = useState("");
+  const styles = createStyles(colors, shadows);
 
   function handleLoginPress() {
     const trimmedEmail = email.trim();
@@ -95,7 +97,8 @@ export default function LoginScreen({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors, shadows) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: 24,
     paddingVertical: 32,
@@ -184,4 +187,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "center",
   },
-});
+  });
+}
