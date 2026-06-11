@@ -1,6 +1,5 @@
 import {
   Animated,
-  Image,
   Pressable,
   StyleSheet,
   Switch,
@@ -8,9 +7,10 @@ import {
   View,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
+import { fetchCategories } from "../features/categories/services/categoriesApi";
 import { useAuth } from "../features/auth/context/AuthContext";
 import { useTheme } from "../theme";
 
@@ -18,8 +18,46 @@ export default function LoggedScreen({ loading = false, onLogout }) {
   const { signOut, user } = useAuth();
   const { colors, isDarkMode, setDarkMode, shadows } = useTheme();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [categoriesError, setCategoriesError] = useState("");
   const rotation = useRef(new Animated.Value(0)).current;
   const styles = createStyles(colors, shadows);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadCategories() {
+      setIsLoadingCategories(true);
+      setCategoriesError("");
+
+      try {
+        const data = await fetchCategories();
+
+        if (isMounted) {
+          setCategories(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (isMounted) {
+          setCategoriesError("Nao foi possivel carregar as categorias.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingCategories(false);
+        }
+      }
+    }
+
+    loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [loading]);
 
   const rotationStyle = {
     transform: [
@@ -44,6 +82,10 @@ export default function LoggedScreen({ loading = false, onLogout }) {
   function handleSettingsPress() {
     const nextIsOpen = !isSettingsOpen;
 
+    setSettingsOpen(nextIsOpen);
+  }
+
+  function setSettingsOpen(nextIsOpen) {
     Animated.timing(rotation, {
       toValue: nextIsOpen ? 1 : 0,
       duration: 260,
@@ -56,58 +98,83 @@ export default function LoggedScreen({ loading = false, onLogout }) {
   return (
     <ScreenContainer contentStyle={styles.container}>
       {!loading ? (
-        <View style={styles.settingsWrap}>
-          <Pressable
-            accessibilityLabel="Abrir configuracoes"
-            style={styles.settingsButton}
-            onPress={handleSettingsPress}
-          >
-            <Animated.View style={rotationStyle}>
-              <Ionicons
-                name="settings-outline"
-                size={24}
-                color={colors.textPrimary}
-              />
-            </Animated.View>
-          </Pressable>
-
+        <>
           {isSettingsOpen ? (
-            <View style={styles.settingsPanel}>
-              <Text style={styles.settingsTitle}>Opcoes</Text>
-              <View style={styles.optionRow}>
-                <Text style={styles.optionText}>Tema escuro</Text>
-                <Switch
-                  value={isDarkMode}
-                  onValueChange={setDarkMode}
-                  trackColor={{
-                    false: colors.borderStrong,
-                    true: colors.link,
-                  }}
-                  thumbColor={colors.surface}
-                />
-              </View>
-              <Pressable style={styles.logoutButton} onPress={handleLogout}>
-                <Text style={styles.logoutText}>Sair</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              accessibilityLabel="Fechar configuracoes"
+              style={styles.settingsBackdrop}
+              onPress={() => setSettingsOpen(false)}
+            />
           ) : null}
-        </View>
+
+          <View
+            style={[
+              styles.settingsWrap,
+              isSettingsOpen ? styles.settingsWrapOpen : null,
+            ]}
+          >
+            <Pressable
+              accessibilityLabel="Abrir configuracoes"
+              style={styles.settingsButton}
+              onPress={handleSettingsPress}
+            >
+              <Animated.View style={rotationStyle}>
+                <Ionicons
+                  name="settings-outline"
+                  size={24}
+                  color={colors.textPrimary}
+                />
+              </Animated.View>
+            </Pressable>
+
+            {isSettingsOpen ? (
+              <View style={styles.settingsPanel}>
+                <Text style={styles.settingsTitle}>Opcoes</Text>
+                <View style={styles.optionRow}>
+                  <Text style={styles.optionText}>Tema escuro</Text>
+                  <Switch
+                    value={isDarkMode}
+                    onValueChange={setDarkMode}
+                    trackColor={{
+                      false: colors.borderStrong,
+                      true: colors.link,
+                    }}
+                    thumbColor={colors.surface}
+                  />
+                </View>
+                <Pressable style={styles.logoutButton} onPress={handleLogout}>
+                  <Text style={styles.logoutText}>Sair</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </>
       ) : null}
 
-      <View style={styles.card}>
-        {loading ? (
-          <Text style={styles.text}>carregando...</Text>
-        ) : (
-          <>
-            {user?.photo ? (
-              <Image source={{ uri: user.photo }} style={styles.avatar} />
-            ) : null}
-            <Text style={styles.text}>logado</Text>
-            <Text style={styles.name}>{user?.name ?? "Sem nome"}</Text>
-            <Text style={styles.email}>{user?.email ?? "Sem e-mail"}</Text>
-          </>
-        )}
-      </View>
+      {loading ? (
+        <View style={styles.categoriesCard}>
+          <Text style={styles.helperText}>Carregando...</Text>
+        </View>
+      ) : (
+        <View style={styles.categoriesCard}>
+          <Text style={styles.sectionTitle}>Categorias</Text>
+
+          {isLoadingCategories ? (
+            <Text style={styles.helperText}>Carregando categorias...</Text>
+          ) : categoriesError ? (
+            <Text style={styles.errorText}>{categoriesError}</Text>
+          ) : categories.length ? (
+            categories.map((category) => (
+              <View key={category.id} style={styles.categoryItem}>
+                <Text style={styles.categoryName}>{category.nome}</Text>
+                
+              </View>
+            ))
+          ) : (
+            <Text style={styles.helperText}>Nenhuma categoria encontrada.</Text>
+          )}
+        </View>
+      )}
     </ScreenContainer>
   );
 }
@@ -116,53 +183,74 @@ function createStyles(colors, shadows) {
   return StyleSheet.create({
   container: {
     alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    justifyContent: "flex-start",
+    paddingHorizontal: 24,
+    paddingTop: 96,
+    paddingBottom: 24,
   },
-  card: {
-    minWidth: 220,
+  categoriesCard: {
     width: "100%",
     maxWidth: 340,
-    paddingHorizontal: 32,
-    paddingVertical: 40,
-    borderRadius: 28,
+    padding: 20,
+    borderRadius: 18,
     backgroundColor: colors.surfaceMuted,
-    alignItems: "center",
-    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadows.soft,
   },
-  avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    marginBottom: 20,
-    backgroundColor: colors.border,
-  },
-  text: {
-    fontSize: 32,
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
     fontWeight: "800",
-    color: colors.textPrimary,
-    textTransform: "lowercase",
+    marginBottom: 14,
   },
-  name: {
-    marginTop: 16,
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    textAlign: "center",
+  categoryItem: {
+    minHeight: 48,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
-  email: {
-    marginTop: 8,
-    fontSize: 14,
+  categoryName: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  categoryStatus: {
+    marginTop: 4,
     color: colors.textMutedDark,
-    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  helperText: {
+    color: colors.textMutedDark,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 14,
+    lineHeight: 20,
   },
   settingsWrap: {
     position: "absolute",
     top: 18,
     right: 18,
-    zIndex: 10,
+    zIndex: 100,
+    elevation: 100,
     alignItems: "flex-end",
+  },
+  settingsBackdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 90,
+    elevation: 90,
+  },
+  settingsWrapOpen: {
+    width: 220,
+    height: 190,
   },
   settingsButton: {
     width: 48,
@@ -176,13 +264,17 @@ function createStyles(colors, shadows) {
     ...shadows.soft,
   },
   settingsPanel: {
+    position: "absolute",
+    top: 58,
+    right: 0,
     width: 220,
-    marginTop: 10,
     padding: 16,
     borderRadius: 18,
     backgroundColor: colors.surfaceMuted,
     borderWidth: 1,
     borderColor: colors.border,
+    zIndex: 101,
+    elevation: 101,
     ...shadows.soft,
   },
   settingsTitle: {

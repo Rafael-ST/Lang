@@ -12,3 +12,6 @@ Projeto React Native com Expo contendo uma tela de login estatica.
 - `App.js`: tela de login estatica
 - `app.json`: configuracao do app
 - `babel.config.js`: configuracao do Babel para Expo
+
+
+npx expo start
