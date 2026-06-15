@@ -1,5 +1,7 @@
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { Animated, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useRef, useState } from "react";
 
 import { useAuth } from "../features/auth/context/AuthContext";
 import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
@@ -10,11 +12,52 @@ import CategoryModuleScreen from "../screens/CategoryModuleScreen";
 import { useTheme } from "../theme";
 
 export default function AppNavigator() {
-  const { isLoading, user } = useAuth();
-  const { isDarkMode } = useTheme();
+  const { isLoading, signOut, user } = useAuth();
+  const { colors, isDarkMode, setDarkMode, shadows } = useTheme();
   const [screen, setScreen] = useState("login");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isManualLoggedIn, setIsManualLoggedIn] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const rotation = useRef(new Animated.Value(0)).current;
+  const styles = createStyles(colors, shadows);
+  const isLoggedIn = Boolean(user || isManualLoggedIn);
+
+  const rotationStyle = {
+    transform: [
+      {
+        rotate: rotation.interpolate({
+          inputRange: [0, 1],
+          outputRange: ["0deg", "180deg"],
+        }),
+      },
+    ],
+  };
+
+  function handleLogout() {
+    setSettingsOpen(false);
+
+    if (user) {
+      signOut();
+    }
+
+    setIsManualLoggedIn(false);
+    setSelectedCategory(null);
+    setScreen("login");
+  }
+
+  function handleSettingsPress() {
+    setSettingsOpen(!isSettingsOpen);
+  }
+
+  function setSettingsOpen(nextIsOpen) {
+    Animated.timing(rotation, {
+      toValue: nextIsOpen ? 1 : 0,
+      duration: 260,
+      useNativeDriver: true,
+    }).start();
+
+    setIsSettingsOpen(nextIsOpen);
+  }
 
   if (isLoading) {
     return (
@@ -28,25 +71,72 @@ export default function AppNavigator() {
   return (
     <>
       <StatusBar style={isDarkMode ? "light" : "dark"} />
-      {user || isManualLoggedIn ? (
-        screen === "category-module" ? (
-          <CategoryModuleScreen
-            category={selectedCategory}
-            onBack={() => setScreen("logged")}
-          />
-        ) : (
-          <LoggedScreen
-            onLogout={() => {
-              setIsManualLoggedIn(false);
-              setSelectedCategory(null);
-              setScreen("login");
-            }}
-            onCategoryPress={(category) => {
-              setSelectedCategory(category);
-              setScreen("category-module");
-            }}
-          />
-        )
+      {isLoggedIn ? (
+        <>
+          {screen === "category-module" ? (
+            <CategoryModuleScreen
+              category={selectedCategory}
+              onBack={() => setScreen("logged")}
+            />
+          ) : (
+            <LoggedScreen
+              onCategoryPress={(category) => {
+                setSelectedCategory(category);
+                setScreen("category-module");
+              }}
+            />
+          )}
+
+          {isSettingsOpen ? (
+            <Pressable
+              accessibilityLabel="Fechar configuracoes"
+              style={styles.settingsBackdrop}
+              onPress={() => setSettingsOpen(false)}
+            />
+          ) : null}
+
+          <View
+            style={[
+              styles.settingsWrap,
+              isSettingsOpen ? styles.settingsWrapOpen : null,
+            ]}
+          >
+            <Pressable
+              accessibilityLabel="Abrir configuracoes"
+              style={styles.settingsButton}
+              onPress={handleSettingsPress}
+            >
+              <Animated.View style={rotationStyle}>
+                <Ionicons
+                  name="settings-outline"
+                  size={24}
+                  color={colors.textPrimary}
+                />
+              </Animated.View>
+            </Pressable>
+
+            {isSettingsOpen ? (
+              <View style={styles.settingsPanel}>
+                <Text style={styles.settingsTitle}>Opcoes</Text>
+                <View style={styles.optionRow}>
+                  <Text style={styles.optionText}>Tema escuro</Text>
+                  <Switch
+                    value={isDarkMode}
+                    onValueChange={setDarkMode}
+                    trackColor={{
+                      false: colors.borderStrong,
+                      true: colors.link,
+                    }}
+                    thumbColor={colors.surface}
+                  />
+                </View>
+                <Pressable style={styles.logoutButton} onPress={handleLogout}>
+                  <Text style={styles.logoutText}>Sair</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </>
       ) : screen === "forgot-password" ? (
         <ForgotPasswordScreen onBack={() => setScreen("login")} />
       ) : screen === "register" ? (
@@ -63,4 +153,87 @@ export default function AppNavigator() {
       )}
     </>
   );
+}
+
+function createStyles(colors, shadows) {
+  return StyleSheet.create({
+    settingsWrap: {
+      position: "absolute",
+      top: 18,
+      right: 18,
+      zIndex: 100,
+      elevation: 100,
+      alignItems: "flex-end",
+    },
+    settingsBackdrop: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      zIndex: 90,
+      elevation: 90,
+    },
+    settingsWrapOpen: {
+      width: 220,
+      height: 190,
+    },
+    settingsButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surfaceMuted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.soft,
+    },
+    settingsPanel: {
+      position: "absolute",
+      top: 58,
+      right: 0,
+      width: 220,
+      padding: 16,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceMuted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      zIndex: 101,
+      elevation: 101,
+      ...shadows.soft,
+    },
+    settingsTitle: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: "800",
+      marginBottom: 12,
+    },
+    optionRow: {
+      minHeight: 42,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    optionText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    logoutButton: {
+      height: 46,
+      marginTop: 14,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.textPrimary,
+    },
+    logoutText: {
+      color: colors.surfaceMuted,
+      fontSize: 14,
+      fontWeight: "800",
+    },
+  });
 }

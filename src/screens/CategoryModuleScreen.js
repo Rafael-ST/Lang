@@ -1,5 +1,5 @@
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
 import { fetchCardsByCategory } from "../features/cards/services/cardsApi";
@@ -10,8 +10,10 @@ export default function CategoryModuleScreen({ category, onBack }) {
   const [cards, setCards] = useState([]);
   const [selectedCardIndex, setSelectedCardIndex] = useState(0);
   const [wrongOptionId, setWrongOptionId] = useState(null);
+  const [correctOptionId, setCorrectOptionId] = useState(null);
   const [isLoadingCards, setIsLoadingCards] = useState(false);
   const [cardsError, setCardsError] = useState("");
+  const nextCardTimeout = useRef(null);
   const styles = createStyles(colors, shadows);
   const playableCards = useMemo(
     () =>
@@ -57,6 +59,7 @@ export default function CategoryModuleScreen({ category, onBack }) {
           setCards(nextCards);
           setSelectedCardIndex(0);
           setWrongOptionId(null);
+          setCorrectOptionId(null);
         }
       } catch {
         if (isMounted) {
@@ -74,30 +77,37 @@ export default function CategoryModuleScreen({ category, onBack }) {
 
     return () => {
       isMounted = false;
+      clearTimeout(nextCardTimeout.current);
     };
   }, [category?.id]);
 
   function handleOptionPress(optionCard) {
+    if (correctOptionId || wrongOptionId) {
+      return;
+    }
+
     if (optionCard.id !== selectedCard?.id) {
       setWrongOptionId(optionCard.id);
-      Alert.alert(
-        "Resposta errada",
-        "Essa opcao nao corresponde ao nome exibido.",
-        [
-          {
-            text: "OK",
-            onPress: () => setWrongOptionId(null),
-          },
-        ],
-        {
-          cancelable: true,
-          onDismiss: () => setWrongOptionId(null),
-        }
-      );
+      clearTimeout(nextCardTimeout.current);
+
+      nextCardTimeout.current = setTimeout(() => {
+        setWrongOptionId(null);
+        goToRandomCard();
+      }, 700);
       return;
     }
 
     setWrongOptionId(null);
+    setCorrectOptionId(optionCard.id);
+    clearTimeout(nextCardTimeout.current);
+
+    nextCardTimeout.current = setTimeout(() => {
+      setCorrectOptionId(null);
+      goToRandomCard();
+    }, 700);
+  }
+
+  function goToRandomCard() {
     setSelectedCardIndex((currentIndex) => {
       if (!playableCards.length) {
         return 0;
@@ -111,6 +121,24 @@ export default function CategoryModuleScreen({ category, onBack }) {
 
       return nextIndex;
     });
+  }
+
+  function handleBackPress() {
+    Alert.alert(
+      "Sair da licao?",
+      "Caso saia voce perdera o progresso dessa licao.",
+      [
+        {
+          text: "Permanecer",
+          style: "cancel",
+        },
+        {
+          text: "Voltar",
+          style: "destructive",
+          onPress: onBack,
+        },
+      ]
+    );
   }
 
   return (
@@ -129,10 +157,14 @@ export default function CategoryModuleScreen({ category, onBack }) {
             {optionCards.map((card) => (
               <Pressable
                 key={card.id}
+                disabled={Boolean(correctOptionId || wrongOptionId)}
                 style={({ pressed }) => [
                   styles.optionItem,
+                  pressed && !correctOptionId && !wrongOptionId
+                    ? styles.optionItemPressed
+                    : null,
                   wrongOptionId === card.id ? styles.optionItemWrong : null,
-                  pressed ? styles.optionItemPressed : null,
+                  correctOptionId === card.id ? styles.optionItemCorrect : null,
                 ]}
                 onPress={() => handleOptionPress(card)}
               >
@@ -144,7 +176,7 @@ export default function CategoryModuleScreen({ category, onBack }) {
           <Text style={styles.helperText}>Nenhum card encontrado.</Text>
         )}
 
-        <Pressable style={styles.backButton} onPress={onBack}>
+        <Pressable style={styles.backButton} onPress={handleBackPress}>
           <Text style={styles.backButtonText}>Voltar para categorias</Text>
         </Pressable>
       </View>
@@ -220,6 +252,10 @@ function createStyles(colors, shadows) {
     optionItemWrong: {
       backgroundColor: colors.error,
       borderColor: colors.error,
+    },
+    optionItemCorrect: {
+      backgroundColor: colors.success,
+      borderColor: colors.success,
     },
     optionText: {
       color: colors.textPrimary,
