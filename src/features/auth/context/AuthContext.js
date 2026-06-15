@@ -36,7 +36,7 @@ export function AuthProvider({ children }) {
         const storedUser = await loadStoredUser();
         setUser(storedUser);
       } catch {
-        setAuthError("Nao foi possivel restaurar a sessao local.");
+        setAuthError("Não foi possível restaurar a sessão local.");
       } finally {
         setIsLoading(false);
       }
@@ -101,7 +101,7 @@ export function AuthProvider({ children }) {
     try {
       await promptAsync();
     } catch {
-      setAuthError("Nao foi possivel abrir o login Google.");
+      setAuthError("Não foi possível abrir o login Google.");
       setIsSigningIn(false);
     }
   }

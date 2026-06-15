@@ -13,7 +13,7 @@ export const lightColors = {
   borderStrong: "#d6cabd",
   link: "#7a5c3b",
   shadow: "#7b6a58",
-  error: "#b4473f",
+  error: "#F57C64",
 };
 
 export const darkColors = {

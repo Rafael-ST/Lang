@@ -1,2 +1,5 @@
-// Em celular fisico com Expo Go, troque localhost pelo IP do seu computador.
-export const API_BASE_URL = "http://172.30.85.113:8000/api/v1";
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  throw new Error("Defina EXPO_PUBLIC_API_BASE_URL no arquivo .env.");
+}

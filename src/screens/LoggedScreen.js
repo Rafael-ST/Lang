@@ -14,7 +14,7 @@ import { fetchCategories } from "../features/categories/services/categoriesApi";
 import { useAuth } from "../features/auth/context/AuthContext";
 import { useTheme } from "../theme";
 
-export default function LoggedScreen({ loading = false, onLogout }) {
+export default function LoggedScreen({ loading = false, onLogout, onCategoryPress }) {
   const { signOut, user } = useAuth();
   const { colors, isDarkMode, setDarkMode, shadows } = useTheme();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -129,7 +129,7 @@ export default function LoggedScreen({ loading = false, onLogout }) {
 
             {isSettingsOpen ? (
               <View style={styles.settingsPanel}>
-                <Text style={styles.settingsTitle}>Opcoes</Text>
+                <Text style={styles.settingsTitle}>Opções</Text>
                 <View style={styles.optionRow}>
                   <Text style={styles.optionText}>Tema escuro</Text>
                   <Switch
@@ -165,10 +165,16 @@ export default function LoggedScreen({ loading = false, onLogout }) {
             <Text style={styles.errorText}>{categoriesError}</Text>
           ) : categories.length ? (
             categories.map((category) => (
-              <View key={category.id} style={styles.categoryItem}>
+              <Pressable
+                key={category.id}
+                style={({ pressed }) => [
+                  styles.categoryItem,
+                  pressed ? styles.categoryItemPressed : null,
+                ]}
+                onPress={() => onCategoryPress?.(category)}
+              >
                 <Text style={styles.categoryName}>{category.nome}</Text>
-                
-              </View>
+              </Pressable>
             ))
           ) : (
             <Text style={styles.helperText}>Nenhuma categoria encontrada.</Text>
@@ -209,6 +215,9 @@ function createStyles(colors, shadows) {
     paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+  },
+  categoryItemPressed: {
+    backgroundColor: colors.surface,
   },
   categoryName: {
     color: colors.textPrimary,
