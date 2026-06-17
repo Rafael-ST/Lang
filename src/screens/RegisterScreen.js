@@ -32,7 +32,7 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
     }
 
     if (!trimmedEmail.includes("@")) {
-      setRegisterError("Digite um e-mail valido.");
+      setRegisterError("Digite um e-mail válido.");
       return;
     }
 
@@ -42,7 +42,7 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
     }
 
     if (trimmedPassword !== trimmedConfirmPassword) {
-      setRegisterError("As senhas nao conferem.");
+      setRegisterError("As senhas não conferem.");
       return;
     }
 
@@ -56,7 +56,7 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
         <Text style={styles.badge}>Cadastro</Text>
         <Text style={styles.title}>Criar conta</Text>
         <Text style={styles.subtitle}>
-          Cadastre seus dados para comecar a usar o Lang.
+          Cadastre seus dados para começar a usar o Lang.
         </Text>
       </View>
 
@@ -100,7 +100,7 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
         ) : null}
 
         <Pressable style={styles.linkButton} onPress={onBack}>
-          <Text style={styles.linkText}>Ja tenho uma conta</Text>
+          <Text style={styles.linkText}>Já tenho uma conta</Text>
         </Pressable>
       </View>
     </ScreenContainer>

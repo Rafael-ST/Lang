@@ -66,7 +66,7 @@ export function AuthProvider({ children }) {
         const accessToken = response.authentication?.accessToken;
 
         if (!accessToken) {
-          throw new Error("Token de acesso nao retornado pelo Google.");
+          throw new Error("Token de acesso não retornado pelo Google.");
         }
 
         const profile = await fetchGoogleUser(accessToken);
@@ -91,7 +91,7 @@ export function AuthProvider({ children }) {
     }
 
     if (!request) {
-      setAuthError("O login Google ainda esta carregando.");
+      setAuthError("O login Google ainda está carregando.");
       return;
     }
 

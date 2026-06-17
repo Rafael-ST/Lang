@@ -31,7 +31,7 @@ export default function LoggedScreen({ loading = false, onCategoryPress }) {
         }
       } catch {
         if (isMounted) {
-          setCategoriesError("Nao foi possivel carregar as categorias.");
+          setCategoriesError("Não foi possível carregar as categorias.");
         }
       } finally {
         if (isMounted) {

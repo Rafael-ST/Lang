@@ -1,7 +1,8 @@
 import { StatusBar } from "expo-status-bar";
 import { Animated, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "../features/auth/context/AuthContext";
 import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
@@ -11,6 +12,8 @@ import RegisterScreen from "../screens/RegisterScreen";
 import CategoryModuleScreen from "../screens/CategoryModuleScreen";
 import { useTheme } from "../theme";
 
+const VIBRATION_STORAGE_KEY = "@lang/vibration-enabled";
+
 export default function AppNavigator() {
   const { isLoading, signOut, user } = useAuth();
   const { colors, isDarkMode, setDarkMode, shadows } = useTheme();
@@ -18,6 +21,7 @@ export default function AppNavigator() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isManualLoggedIn, setIsManualLoggedIn] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isVibrationEnabled, setIsVibrationEnabled] = useState(true);
   const rotation = useRef(new Animated.Value(0)).current;
   const styles = createStyles(colors, shadows);
   const isLoggedIn = Boolean(user || isManualLoggedIn);
@@ -32,6 +36,26 @@ export default function AppNavigator() {
       },
     ],
   };
+
+  useEffect(() => {
+    async function restoreVibrationPreference() {
+      const storedPreference = await AsyncStorage.getItem(VIBRATION_STORAGE_KEY);
+
+      if (storedPreference === "enabled" || storedPreference === "disabled") {
+        setIsVibrationEnabled(storedPreference === "enabled");
+      }
+    }
+
+    restoreVibrationPreference();
+  }, []);
+
+  async function handleVibrationChange(nextIsEnabled) {
+    setIsVibrationEnabled(nextIsEnabled);
+    await AsyncStorage.setItem(
+      VIBRATION_STORAGE_KEY,
+      nextIsEnabled ? "enabled" : "disabled"
+    );
+  }
 
   function handleLogout() {
     setSettingsOpen(false);
@@ -76,6 +100,7 @@ export default function AppNavigator() {
           {screen === "category-module" ? (
             <CategoryModuleScreen
               category={selectedCategory}
+              vibrationEnabled={isVibrationEnabled}
               onBack={() => setScreen("logged")}
             />
           ) : (
@@ -89,7 +114,7 @@ export default function AppNavigator() {
 
           {isSettingsOpen ? (
             <Pressable
-              accessibilityLabel="Fechar configuracoes"
+              accessibilityLabel="Fechar configurações"
               style={styles.settingsBackdrop}
               onPress={() => setSettingsOpen(false)}
             />
@@ -102,7 +127,7 @@ export default function AppNavigator() {
             ]}
           >
             <Pressable
-              accessibilityLabel="Abrir configuracoes"
+              accessibilityLabel="Abrir configurações"
               style={styles.settingsButton}
               onPress={handleSettingsPress}
             >
@@ -117,12 +142,24 @@ export default function AppNavigator() {
 
             {isSettingsOpen ? (
               <View style={styles.settingsPanel}>
-                <Text style={styles.settingsTitle}>Opcoes</Text>
+                <Text style={styles.settingsTitle}>Opções</Text>
                 <View style={styles.optionRow}>
                   <Text style={styles.optionText}>Tema escuro</Text>
                   <Switch
                     value={isDarkMode}
                     onValueChange={setDarkMode}
+                    trackColor={{
+                      false: colors.borderStrong,
+                      true: colors.link,
+                    }}
+                    thumbColor={colors.surface}
+                  />
+                </View>
+                <View style={styles.optionRow}>
+                  <Text style={styles.optionText}>Vibração</Text>
+                  <Switch
+                    value={isVibrationEnabled}
+                    onValueChange={handleVibrationChange}
                     trackColor={{
                       false: colors.borderStrong,
                       true: colors.link,
@@ -176,7 +213,7 @@ function createStyles(colors, shadows) {
     },
     settingsWrapOpen: {
       width: 220,
-      height: 190,
+      height: 240,
     },
     settingsButton: {
       width: 48,

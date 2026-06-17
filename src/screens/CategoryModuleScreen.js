@@ -1,11 +1,15 @@
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, Vibration, View } from "react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
 import { fetchCardsByCategory } from "../features/cards/services/cardsApi";
 import { useTheme } from "../theme";
 
-export default function CategoryModuleScreen({ category, onBack }) {
+export default function CategoryModuleScreen({
+  category,
+  onBack,
+  vibrationEnabled = true,
+}) {
   const { colors, shadows } = useTheme();
   const [cards, setCards] = useState([]);
   const [selectedCardIndex, setSelectedCardIndex] = useState(0);
@@ -23,7 +27,7 @@ export default function CategoryModuleScreen({ category, onBack }) {
     [cards]
   );
   const selectedCard = playableCards[selectedCardIndex];
-  const moduleName = selectedCard?.english_name || category?.nome || "Modulo";
+  const moduleName = selectedCard?.english_name || category?.nome || "Módulo";
   const optionCards = useMemo(() => {
     if (!selectedCard?.international_name) {
       return [];
@@ -64,7 +68,7 @@ export default function CategoryModuleScreen({ category, onBack }) {
       } catch {
         if (isMounted) {
           setCards([]);
-          setCardsError("Nao foi possivel carregar os cards.");
+          setCardsError("Não foi possível carregar os cards.");
         }
       } finally {
         if (isMounted) {
@@ -87,6 +91,10 @@ export default function CategoryModuleScreen({ category, onBack }) {
     }
 
     if (optionCard.id !== selectedCard?.id) {
+      if (vibrationEnabled) {
+        Vibration.vibrate(500);
+      }
+
       setWrongOptionId(optionCard.id);
       clearTimeout(nextCardTimeout.current);
 
@@ -125,8 +133,8 @@ export default function CategoryModuleScreen({ category, onBack }) {
 
   function handleBackPress() {
     Alert.alert(
-      "Sair da licao?",
-      "Caso saia voce perdera o progresso dessa licao.",
+      "Sair da lição?",
+      "Caso saia você perderá o progresso dessa lição.",
       [
         {
           text: "Permanecer",

@@ -10,7 +10,7 @@ export async function fetchGoogleUser(accessToken) {
   });
 
   if (!response.ok) {
-    throw new Error("Nao foi possivel buscar os dados do usuario Google.");
+    throw new Error("Não foi possível buscar os dados do usuário Google.");
   }
 
   const profile = await response.json();
