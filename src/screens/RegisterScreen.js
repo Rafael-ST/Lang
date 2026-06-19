@@ -4,25 +4,30 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import AppButton from "../components/AppButton";
 import AppTextField from "../components/AppTextField";
 import ScreenContainer from "../components/ScreenContainer";
+import { createUser } from "../features/users/services/usersApi";
 import { useTheme } from "../theme";
 
 export default function RegisterScreen({ onBack, onRegisterPress }) {
   const { colors, shadows } = useTheme();
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
   const styles = createStyles(colors, shadows);
 
-  function handleRegisterPress() {
-    const trimmedName = name.trim();
+  async function handleRegisterPress() {
+    const trimmedFirstName = firstName.trim();
+    const trimmedLastName = lastName.trim();
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
     const trimmedConfirmPassword = confirmPassword.trim();
 
     if (
-      !trimmedName ||
+      !trimmedFirstName ||
+      !trimmedLastName ||
       !trimmedEmail ||
       !trimmedPassword ||
       !trimmedConfirmPassword
@@ -46,8 +51,21 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
       return;
     }
 
-    setRegisterError("");
-    onRegisterPress?.();
+    try {
+      setIsRegistering(true);
+      setRegisterError("");
+      await createUser({
+        email: trimmedEmail,
+        firstName: trimmedFirstName,
+        lastName: trimmedLastName,
+        password: trimmedPassword,
+      });
+      onRegisterPress?.();
+    } catch (error) {
+      setRegisterError(error.message);
+    } finally {
+      setIsRegistering(false);
+    }
   }
 
   return (
@@ -64,8 +82,15 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
         <AppTextField
           label="Nome"
           placeholder="Seu nome"
-          value={name}
-          onChangeText={setName}
+          value={firstName}
+          onChangeText={setFirstName}
+        />
+
+        <AppTextField
+          label="Sobrenome"
+          placeholder="Seu sobrenome"
+          value={lastName}
+          onChangeText={setLastName}
         />
 
         <AppTextField
@@ -93,7 +118,11 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
           onChangeText={setConfirmPassword}
         />
 
-        <AppButton label="Criar conta" onPress={handleRegisterPress} />
+        <AppButton
+          label={isRegistering ? "Criando..." : "Criar conta"}
+          disabled={isRegistering}
+          onPress={handleRegisterPress}
+        />
 
         {registerError ? (
           <Text style={styles.errorText}>{registerError}</Text>

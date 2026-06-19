@@ -2,14 +2,24 @@ import { Pressable, StyleSheet, Text } from "react-native";
 
 import { useTheme } from "../theme";
 
-export default function AppButton({ label, onPress, variant = "primary" }) {
+export default function AppButton({
+  label,
+  onPress,
+  variant = "primary",
+  disabled = false,
+}) {
   const { colors, shadows } = useTheme();
   const styles = createStyles(colors, shadows);
 
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.button, variant === "primary" && styles.primaryButton]}
+      disabled={disabled}
+      style={[
+        styles.button,
+        variant === "primary" && styles.primaryButton,
+        disabled && styles.disabledButton,
+      ]}
     >
       <Text
         style={[
@@ -34,6 +44,9 @@ function createStyles(colors, shadows) {
   primaryButton: {
     backgroundColor: colors.textPrimary,
     ...shadows.soft,
+  },
+  disabledButton: {
+    opacity: 0.65,
   },
   text: {
     fontSize: 16,

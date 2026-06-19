@@ -5,6 +5,7 @@ import {
   googleAuthConfig,
   isGoogleAuthConfigured,
 } from "../constants/googleAuthConfig";
+import { authenticateUser } from "../services/authApi";
 import { fetchGoogleUser } from "../services/googleAuthService";
 import {
   clearStoredUser,
@@ -106,6 +107,26 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function signInWithCredentials({ username, password }) {
+    setAuthError("");
+    setIsSigningIn(true);
+
+    try {
+      const tokenData = await authenticateUser({ username, password });
+      const authenticatedUser = {
+        username,
+        token: tokenData,
+      };
+
+      setUser(authenticatedUser);
+      await storeUser(authenticatedUser);
+    } catch (error) {
+      throw error;
+    } finally {
+      setIsSigningIn(false);
+    }
+  }
+
   async function signOut() {
     setUser(null);
     await clearStoredUser();
@@ -116,6 +137,7 @@ export function AuthProvider({ children }) {
     isConfigured,
     isLoading,
     isSigningIn,
+    signInWithCredentials,
     signInWithGoogle,
     signOut,
     user,

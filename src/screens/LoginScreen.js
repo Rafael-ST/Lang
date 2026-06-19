@@ -13,14 +13,20 @@ export default function LoginScreen({
   onLoginPress,
   onRegisterPress,
 }) {
-  const { authError, isConfigured, isSigningIn, signInWithGoogle } = useAuth();
+  const {
+    authError,
+    isConfigured,
+    isSigningIn,
+    signInWithCredentials,
+    signInWithGoogle,
+  } = useAuth();
   const { colors, shadows } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [manualLoginError, setManualLoginError] = useState("");
   const styles = createStyles(colors, shadows);
 
-  function handleLoginPress() {
+  async function handleLoginPress() {
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
 
@@ -29,8 +35,16 @@ export default function LoginScreen({
       return;
     }
 
-    setManualLoginError("");
-    onLoginPress?.();
+    try {
+      setManualLoginError("");
+      await signInWithCredentials({
+        username: trimmedEmail,
+        password: trimmedPassword,
+      });
+      onLoginPress?.();
+    } catch (error) {
+      setManualLoginError(error.message);
+    }
   }
 
   return (
@@ -59,7 +73,11 @@ export default function LoginScreen({
           onChangeText={setPassword}
         />
 
-        <AppButton label="Entrar" onPress={handleLoginPress} />
+        <AppButton
+          label={isSigningIn ? "Entrando..." : "Entrar"}
+          disabled={isSigningIn}
+          onPress={handleLoginPress}
+        />
 
         {manualLoginError ? (
           <Text style={styles.errorText}>{manualLoginError}</Text>
