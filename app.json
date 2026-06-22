@@ -28,6 +28,9 @@
         "androidClientId": "46582084112-4v43hbjpnigq5d0qeod0olsdh8mleas8.apps.googleusercontent.com",
         "iosClientId": "46582084112-5abjvbbbrfubi6otkkmg2cvm4kcf3k46.apps.googleusercontent.com",
         "webClientId": "46582084112-mp2tu185jebr279c5sjq91u6kdpekkcu.apps.googleusercontent.com"
+      },
+      "eas": {
+        "projectId": "2fb41043-3f09-43fe-bee4-5ed593f201f1"
       }
     }
   }
