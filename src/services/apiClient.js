@@ -1,9 +1,13 @@
 import { API_BASE_URL } from "../config/api";
+import { loadStoredUser } from "../features/auth/services/authStorage";
 
 export async function apiRequest(path, options = {}) {
+  const authorizationHeader = await getAuthorizationHeader(options);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...authorizationHeader,
       ...(options.headers || {}),
     },
     ...options,
@@ -16,6 +20,41 @@ export async function apiRequest(path, options = {}) {
   }
 
   return data;
+}
+
+async function getAuthorizationHeader(options) {
+  if (options.skipAuth || options.headers?.Authorization) {
+    return {};
+  }
+
+  const storedUser = await loadStoredUser().catch(() => null);
+  const accessToken = getAccessToken(storedUser?.token);
+
+  if (!accessToken) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
+
+function getAccessToken(tokenData) {
+  if (!tokenData) {
+    return "";
+  }
+
+  if (typeof tokenData === "string") {
+    return tokenData;
+  }
+
+  return (
+    tokenData.access ||
+    tokenData.accessToken ||
+    tokenData.token ||
+    tokenData.key ||
+    ""
+  );
 }
 
 function getApiErrorMessage(data) {

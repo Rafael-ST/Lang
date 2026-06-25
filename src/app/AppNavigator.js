@@ -10,6 +10,7 @@ import LoggedScreen from "../screens/LoggedScreen";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 import CategoryModuleScreen from "../screens/CategoryModuleScreen";
+import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
 import { useTheme } from "../theme";
 
 const VIBRATION_STORAGE_KEY = "@lang/vibration-enabled";
@@ -24,9 +25,12 @@ export default function AppNavigator() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVibrationEnabled, setIsVibrationEnabled] = useState(true);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const rotation = useRef(new Animated.Value(0)).current;
   const styles = createStyles(colors, shadows);
   const isLoggedIn = Boolean(user || isManualLoggedIn);
+  const username = user?.username || user?.email;
 
   const rotationStyle = {
     transform: [
@@ -65,6 +69,40 @@ export default function AppNavigator() {
     restoreSettingsPreferences();
   }, []);
 
+  useEffect(() => {
+    if (!isLoggedIn || !username) {
+      setProfile(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadProfile() {
+      try {
+        setIsLoadingProfile(true);
+        const nextProfile = await fetchProfileByUsername(username);
+
+        if (isMounted) {
+          setProfile(nextProfile);
+        }
+      } catch {
+        if (isMounted) {
+          setProfile(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingProfile(false);
+        }
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isLoggedIn, username]);
+
   async function handleVibrationChange(nextIsEnabled) {
     setIsVibrationEnabled(nextIsEnabled);
     await AsyncStorage.setItem(
@@ -89,6 +127,7 @@ export default function AppNavigator() {
     }
 
     setIsManualLoggedIn(false);
+    setProfile(null);
     setSelectedCategory(null);
     setScreen("login");
   }
@@ -124,7 +163,9 @@ export default function AppNavigator() {
           {screen === "category-module" ? (
             <CategoryModuleScreen
               category={selectedCategory}
+              onProfileChange={setProfile}
               soundEnabled={isSoundEnabled}
+              user={user}
               vibrationEnabled={isVibrationEnabled}
               onBack={() => setScreen("logged")}
             />
@@ -151,6 +192,12 @@ export default function AppNavigator() {
               isSettingsOpen ? styles.settingsWrapOpen : null,
             ]}
           >
+            <View style={styles.pointsBadge}>
+              <Text style={styles.pointsText}>
+                {isLoadingProfile ? "..." : profile?.pontos ?? 0} pts
+              </Text>
+            </View>
+
             <Pressable
               accessibilityLabel="Abrir configurações"
               style={styles.settingsButton}
@@ -237,7 +284,9 @@ function createStyles(colors, shadows) {
       right: 18,
       zIndex: 100,
       elevation: 100,
+      flexDirection: "row",
       alignItems: "flex-end",
+      gap: 8,
     },
     settingsBackdrop: {
       position: "absolute",
@@ -262,6 +311,23 @@ function createStyles(colors, shadows) {
       borderWidth: 1,
       borderColor: colors.border,
       ...shadows.soft,
+    },
+    pointsBadge: {
+      minWidth: 74,
+      height: 38,
+      paddingHorizontal: 12,
+      borderRadius: 19,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surfaceMuted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.soft,
+    },
+    pointsText: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: "800",
     },
     settingsPanel: {
       position: "absolute",
