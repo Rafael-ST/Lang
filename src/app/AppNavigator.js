@@ -13,6 +13,7 @@ import CategoryModuleScreen from "../screens/CategoryModuleScreen";
 import { useTheme } from "../theme";
 
 const VIBRATION_STORAGE_KEY = "@lang/vibration-enabled";
+const SOUND_STORAGE_KEY = "@lang/sound-enabled";
 
 export default function AppNavigator() {
   const { isLoading, signOut, user } = useAuth();
@@ -22,6 +23,7 @@ export default function AppNavigator() {
   const [isManualLoggedIn, setIsManualLoggedIn] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVibrationEnabled, setIsVibrationEnabled] = useState(true);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const rotation = useRef(new Animated.Value(0)).current;
   const styles = createStyles(colors, shadows);
   const isLoggedIn = Boolean(user || isManualLoggedIn);
@@ -38,21 +40,43 @@ export default function AppNavigator() {
   };
 
   useEffect(() => {
-    async function restoreVibrationPreference() {
-      const storedPreference = await AsyncStorage.getItem(VIBRATION_STORAGE_KEY);
+    async function restoreSettingsPreferences() {
+      const [storedVibrationPreference, storedSoundPreference] =
+        await Promise.all([
+          AsyncStorage.getItem(VIBRATION_STORAGE_KEY),
+          AsyncStorage.getItem(SOUND_STORAGE_KEY),
+        ]);
 
-      if (storedPreference === "enabled" || storedPreference === "disabled") {
-        setIsVibrationEnabled(storedPreference === "enabled");
+      if (
+        storedVibrationPreference === "enabled" ||
+        storedVibrationPreference === "disabled"
+      ) {
+        setIsVibrationEnabled(storedVibrationPreference === "enabled");
+      }
+
+      if (
+        storedSoundPreference === "enabled" ||
+        storedSoundPreference === "disabled"
+      ) {
+        setIsSoundEnabled(storedSoundPreference === "enabled");
       }
     }
 
-    restoreVibrationPreference();
+    restoreSettingsPreferences();
   }, []);
 
   async function handleVibrationChange(nextIsEnabled) {
     setIsVibrationEnabled(nextIsEnabled);
     await AsyncStorage.setItem(
       VIBRATION_STORAGE_KEY,
+      nextIsEnabled ? "enabled" : "disabled"
+    );
+  }
+
+  async function handleSoundChange(nextIsEnabled) {
+    setIsSoundEnabled(nextIsEnabled);
+    await AsyncStorage.setItem(
+      SOUND_STORAGE_KEY,
       nextIsEnabled ? "enabled" : "disabled"
     );
   }
@@ -100,6 +124,7 @@ export default function AppNavigator() {
           {screen === "category-module" ? (
             <CategoryModuleScreen
               category={selectedCategory}
+              soundEnabled={isSoundEnabled}
               vibrationEnabled={isVibrationEnabled}
               onBack={() => setScreen("logged")}
             />
@@ -167,6 +192,18 @@ export default function AppNavigator() {
                     thumbColor={colors.surface}
                   />
                 </View>
+                <View style={styles.optionRow}>
+                  <Text style={styles.optionText}>Sons</Text>
+                  <Switch
+                    value={isSoundEnabled}
+                    onValueChange={handleSoundChange}
+                    trackColor={{
+                      false: colors.borderStrong,
+                      true: colors.link,
+                    }}
+                    thumbColor={colors.surface}
+                  />
+                </View>
                 <Pressable style={styles.logoutButton} onPress={handleLogout}>
                   <Text style={styles.logoutText}>Sair</Text>
                 </Pressable>
@@ -213,7 +250,7 @@ function createStyles(colors, shadows) {
     },
     settingsWrapOpen: {
       width: 220,
-      height: 240,
+      height: 282,
     },
     settingsButton: {
       width: 48,

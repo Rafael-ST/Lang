@@ -1,4 +1,5 @@
 import { Alert, Pressable, StyleSheet, Text, Vibration, View } from "react-native";
+import { useAudioPlayer } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
@@ -8,6 +9,7 @@ import { useTheme } from "../theme";
 export default function CategoryModuleScreen({
   category,
   onBack,
+  soundEnabled = true,
   vibrationEnabled = true,
 }) {
   const { colors, shadows } = useTheme();
@@ -18,6 +20,10 @@ export default function CategoryModuleScreen({
   const [isLoadingCards, setIsLoadingCards] = useState(false);
   const [cardsError, setCardsError] = useState("");
   const nextCardTimeout = useRef(null);
+  const correctSoundPlayer = useAudioPlayer(
+    require("../../assets/correct-answer.ogg"),
+    { keepAudioSessionActive: true }
+  );
   const styles = createStyles(colors, shadows);
   const playableCards = useMemo(
     () =>
@@ -107,12 +113,28 @@ export default function CategoryModuleScreen({
 
     setWrongOptionId(null);
     setCorrectOptionId(optionCard.id);
+    playCorrectSound();
     clearTimeout(nextCardTimeout.current);
 
     nextCardTimeout.current = setTimeout(() => {
       setCorrectOptionId(null);
       goToRandomCard();
     }, 700);
+  }
+
+  function playCorrectSound() {
+    if (!soundEnabled) {
+      return;
+    }
+
+    try {
+      correctSoundPlayer
+        .seekTo(0)
+        .then(() => correctSoundPlayer.play())
+        .catch(() => correctSoundPlayer.play());
+    } catch {
+      // Audio feedback is optional; the answer flow should continue if playback fails.
+    }
   }
 
   function goToRandomCard() {
