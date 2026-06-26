@@ -1,17 +1,24 @@
 import { API_BASE_URL } from "../config/api";
-import { loadStoredUser } from "../features/auth/services/authStorage";
+import {
+  clearStoredUser,
+  loadStoredUser,
+  storeUser,
+} from "../features/auth/services/authStorage";
+
+const TOKEN_REFRESH_PATH = "/auth/token/refresh/";
+
+let refreshTokenPromise = null;
 
 export async function apiRequest(path, options = {}) {
-  const authorizationHeader = await getAuthorizationHeader(options);
+  let response = await fetchWithAuth(path, options);
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...authorizationHeader,
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+  if (response.status === 401 && shouldAttemptTokenRefresh(options)) {
+    const refreshedUser = await refreshStoredToken();
+
+    if (refreshedUser) {
+      response = await fetchWithAuth(path, options);
+    }
+  }
 
   const data = await response.json().catch(() => null);
 
@@ -20,6 +27,70 @@ export async function apiRequest(path, options = {}) {
   }
 
   return data;
+}
+
+async function fetchWithAuth(path, options) {
+  const fetchOptions = { ...options };
+  delete fetchOptions.skipAuth;
+  const authorizationHeader = await getAuthorizationHeader(options);
+
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...fetchOptions,
+    headers: {
+      "Content-Type": "application/json",
+      ...authorizationHeader,
+      ...(options.headers || {}),
+    },
+  });
+}
+
+function shouldAttemptTokenRefresh(options) {
+  return !options.skipAuth && !options.headers?.Authorization;
+}
+
+async function refreshStoredToken() {
+  if (!refreshTokenPromise) {
+    refreshTokenPromise = refreshStoredTokenOnce().finally(() => {
+      refreshTokenPromise = null;
+    });
+  }
+
+  return refreshTokenPromise;
+}
+
+async function refreshStoredTokenOnce() {
+  const storedUser = await loadStoredUser().catch(() => null);
+  const refreshToken = getRefreshToken(storedUser?.token);
+
+  if (!storedUser || !refreshToken) {
+    return null;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${TOKEN_REFRESH_PATH}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      refresh: refreshToken,
+    }),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    await clearStoredUser();
+    return null;
+  }
+
+  const refreshedUser = {
+    ...storedUser,
+    token: mergeTokenData(storedUser.token, data),
+  };
+
+  await storeUser(refreshedUser);
+
+  return refreshedUser;
 }
 
 async function getAuthorizationHeader(options) {
@@ -55,6 +126,40 @@ function getAccessToken(tokenData) {
     tokenData.key ||
     ""
   );
+}
+
+function getRefreshToken(tokenData) {
+  if (!tokenData || typeof tokenData === "string") {
+    return "";
+  }
+
+  return tokenData.refresh || tokenData.refreshToken || "";
+}
+
+function mergeTokenData(currentTokenData, refreshedTokenData) {
+  if (!refreshedTokenData) {
+    return currentTokenData;
+  }
+
+  if (typeof currentTokenData === "string") {
+    return (
+      refreshedTokenData.access ||
+      refreshedTokenData.token ||
+      currentTokenData
+    );
+  }
+
+  if (typeof refreshedTokenData === "string") {
+    return {
+      ...(currentTokenData || {}),
+      access: refreshedTokenData,
+    };
+  }
+
+  return {
+    ...(currentTokenData || {}),
+    ...refreshedTokenData,
+  };
 }
 
 function getApiErrorMessage(data) {

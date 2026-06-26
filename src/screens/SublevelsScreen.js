@@ -76,34 +76,36 @@ export default function SublevelsScreen({
           ) : sublevelsError ? (
             <Text style={styles.errorText}>{sublevelsError}</Text>
           ) : sublevels.length ? (
-            sublevels.map((sublevel) => {
-              const isActive = sublevel.is_active !== false;
+            <View style={styles.sublevelsList}>
+              {sublevels.map((sublevel) => {
+                const isActive = sublevel.is_active !== false;
 
-              return (
-                <Pressable
-                  key={sublevel.id}
-                  disabled={!isActive}
-                  style={({ pressed }) => [
-                    styles.sublevelItem,
-                    pressed && isActive ? styles.sublevelItemPressed : null,
-                    !isActive ? styles.sublevelItemDisabled : null,
-                  ]}
-                  onPress={() => onSublevelPress?.(sublevel)}
-                >
-                  <Text
-                    style={[
-                      styles.sublevelName,
-                      !isActive ? styles.sublevelNameDisabled : null,
+                return (
+                  <Pressable
+                    key={sublevel.id}
+                    disabled={!isActive}
+                    style={({ pressed }) => [
+                      styles.sublevelItem,
+                      pressed && isActive ? styles.sublevelItemPressed : null,
+                      !isActive ? styles.sublevelItemDisabled : null,
                     ]}
+                    onPress={() => onSublevelPress?.(sublevel)}
                   >
-                    {sublevel.nome || "Subnivel sem nome"}
-                  </Text>
-                  {!isActive ? (
-                    <Text style={styles.sublevelStatus}>Inativo</Text>
-                  ) : null}
-                </Pressable>
-              );
-            })
+                    <Text
+                      style={[
+                        styles.sublevelName,
+                        !isActive ? styles.sublevelNameDisabled : null,
+                      ]}
+                    >
+                      {sublevel.nome || "Subnivel sem nome"}
+                    </Text>
+                    {!isActive ? (
+                      <Text style={styles.sublevelStatus}>Inativo</Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
           ) : (
             <Text style={styles.helperText}>Nenhum subnivel encontrado.</Text>
           )}
@@ -132,6 +134,9 @@ function createStyles(colors, shadows) {
       borderColor: colors.border,
       ...shadows.soft,
     },
+    sublevelsList: {
+      gap: 12,
+    },
     sectionTitle: {
       color: colors.textPrimary,
       fontSize: 18,
@@ -155,13 +160,19 @@ function createStyles(colors, shadows) {
       fontWeight: "800",
     },
     sublevelItem: {
-      minHeight: 54,
-      paddingVertical: 10,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
+      minHeight: 64,
+      justifyContent: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.soft,
     },
     sublevelItemPressed: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceMuted,
+      borderColor: colors.borderStrong,
     },
     sublevelItemDisabled: {
       opacity: 0.6,
