@@ -9,6 +9,8 @@ import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
 import LoggedScreen from "../screens/LoggedScreen";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
+import LearningLevelsScreen from "../screens/LearningLevelsScreen";
+import SublevelsScreen from "../screens/SublevelsScreen";
 import CategoryModuleScreen from "../screens/CategoryModuleScreen";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
 import { useTheme } from "../theme";
@@ -20,6 +22,8 @@ export default function AppNavigator() {
   const { isLoading, signOut, user } = useAuth();
   const { colors, isDarkMode, setDarkMode, shadows } = useTheme();
   const [screen, setScreen] = useState("login");
+  const [selectedLevel, setSelectedLevel] = useState(null);
+  const [selectedSublevel, setSelectedSublevel] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isManualLoggedIn, setIsManualLoggedIn] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -128,6 +132,8 @@ export default function AppNavigator() {
 
     setIsManualLoggedIn(false);
     setProfile(null);
+    setSelectedLevel(null);
+    setSelectedSublevel(null);
     setSelectedCategory(null);
     setScreen("login");
   }
@@ -169,11 +175,35 @@ export default function AppNavigator() {
               vibrationEnabled={isVibrationEnabled}
               onBack={() => setScreen("logged")}
             />
-          ) : (
+          ) : screen === "logged" ? (
             <LoggedScreen
+              onBack={() => setScreen("sublevels")}
+              sublevel={selectedSublevel}
               onCategoryPress={(category) => {
                 setSelectedCategory(category);
                 setScreen("category-module");
+              }}
+            />
+          ) : screen === "sublevels" ? (
+            <SublevelsScreen
+              level={selectedLevel}
+              onBack={() => {
+                setSelectedSublevel(null);
+                setScreen("levels");
+              }}
+              onSublevelPress={(sublevel) => {
+                setSelectedSublevel(sublevel);
+                setSelectedCategory(null);
+                setScreen("logged");
+              }}
+            />
+          ) : (
+            <LearningLevelsScreen
+              onLevelPress={(level) => {
+                setSelectedLevel(level);
+                setSelectedSublevel(null);
+                setSelectedCategory(null);
+                setScreen("sublevels");
               }}
             />
           )}
@@ -263,7 +293,7 @@ export default function AppNavigator() {
       ) : screen === "register" ? (
         <RegisterScreen
           onBack={() => setScreen("login")}
-          onRegisterPress={() => setIsManualLoggedIn(true)}
+          onRegisterPress={() => setScreen("login")}
         />
       ) : (
         <LoginScreen

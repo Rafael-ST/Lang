@@ -5,7 +5,12 @@ import ScreenContainer from "../components/ScreenContainer";
 import { fetchCategories } from "../features/categories/services/categoriesApi";
 import { useTheme } from "../theme";
 
-export default function LoggedScreen({ loading = false, onCategoryPress }) {
+export default function LoggedScreen({
+  loading = false,
+  onBack,
+  onCategoryPress,
+  sublevel,
+}) {
   const { colors, shadows } = useTheme();
   const [categories, setCategories] = useState([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
@@ -55,7 +60,16 @@ export default function LoggedScreen({ loading = false, onCategoryPress }) {
         </View>
       ) : (
         <View style={styles.categoriesCard}>
+          {onBack ? (
+            <Pressable style={styles.backButton} onPress={onBack}>
+              <Text style={styles.backButtonText}>Voltar para subniveis</Text>
+            </Pressable>
+          ) : null}
+
           <Text style={styles.sectionTitle}>Categorias</Text>
+          {sublevel?.nome ? (
+            <Text style={styles.sectionSubtitle}>{sublevel.nome}</Text>
+          ) : null}
 
           {isLoadingCategories ? (
             <Text style={styles.helperText}>Carregando categorias...</Text>
@@ -106,7 +120,23 @@ function createStyles(colors, shadows) {
       color: colors.textPrimary,
       fontSize: 18,
       fontWeight: "800",
+      marginBottom: 4,
+    },
+    sectionSubtitle: {
+      color: colors.textMutedDark,
+      fontSize: 14,
+      fontWeight: "700",
       marginBottom: 14,
+    },
+    backButton: {
+      alignSelf: "flex-start",
+      marginBottom: 14,
+      paddingVertical: 6,
+    },
+    backButtonText: {
+      color: colors.link,
+      fontSize: 14,
+      fontWeight: "800",
     },
     categoryItem: {
       minHeight: 48,
