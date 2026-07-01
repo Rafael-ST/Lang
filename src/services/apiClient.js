@@ -44,6 +44,10 @@ export async function apiRequest(path, options = {}) {
 
   const data = await response.json().catch(() => null);
 
+  if (path === "/auth/token/" || path === TOKEN_REFRESH_PATH) {
+    logAuthCookieDebug(path, response);
+  }
+
   if (!response.ok) {
     throw new Error(getApiErrorMessage(data));
   }
@@ -58,6 +62,7 @@ async function fetchWithAuth(path, options) {
 
   return fetch(`${API_BASE_URL}${path}`, {
     ...fetchOptions,
+    credentials: fetchOptions.credentials || "include",
     headers: {
       "Content-Type": "application/json",
       ...authorizationHeader,
@@ -92,25 +97,31 @@ async function refreshStoredTokenOnce(reason) {
   }
 
   if (!refreshToken) {
-    logAuthDebug(`Refresh falhou: nao ha refresh token salvo. Motivo: ${reason}.`);
-    await clearStoredUser();
-    notifySessionExpired();
-    return null;
+    logAuthDebug(
+      `Refresh token nao esta no JSON local. Tentando renovar via cookie HttpOnly. Motivo: ${reason}.`
+    );
   }
 
   logAuthDebug(`Chamando ${TOKEN_REFRESH_PATH}. Motivo: ${reason}.`);
 
-  const response = await fetch(`${API_BASE_URL}${TOKEN_REFRESH_PATH}`, {
+  const refreshOptions = {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
+  };
+
+  if (refreshToken) {
+    refreshOptions.body = JSON.stringify({
       refresh: refreshToken,
-    }),
-  });
+    });
+  }
+
+  const response = await fetch(`${API_BASE_URL}${TOKEN_REFRESH_PATH}`, refreshOptions);
 
   const data = await response.json().catch(() => null);
+  logAuthCookieDebug(TOKEN_REFRESH_PATH, response);
 
   if (!response.ok) {
     logAuthDebug(`Refresh retornou HTTP ${response.status}. Limpando sessao.`);
@@ -135,7 +146,7 @@ async function refreshExpiredAccessToken(path) {
   const storedUser = await loadStoredUser().catch(() => null);
   const tokenData = storedUser?.token;
 
-  if (!getRefreshToken(tokenData) || !shouldRefreshAccessToken(tokenData)) {
+  if (!tokenData || !shouldRefreshAccessToken(tokenData)) {
     return;
   }
 
@@ -185,7 +196,7 @@ function getAccessToken(tokenData) {
   );
 }
 
-function getRefreshToken(tokenData) {
+export function getRefreshToken(tokenData) {
   if (!tokenData || typeof tokenData === "string") {
     return "";
   }
@@ -348,6 +359,24 @@ function notifySessionExpired() {
 
 function logAuthDebug(message) {
   console.info(`[auth] ${message}`);
+}
+
+function logAuthCookieDebug(path, response) {
+  let setCookieHeader = "";
+
+  try {
+    setCookieHeader =
+      response.headers?.get?.("set-cookie") ||
+      response.headers?.get?.("Set-Cookie") ||
+      "";
+  } catch {
+    setCookieHeader = "";
+  }
+
+  console.info(
+    `[auth] ${path} - Set-Cookie:`,
+    setCookieHeader || "(nao legivel pelo fetch; cookie HttpOnly fica fora do JS)"
+  );
 }
 
 function getApiErrorMessage(data) {

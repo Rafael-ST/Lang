@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import * as Google from "expo-auth-session/providers/google";
 
 import {
+  getRefreshToken,
   hasRefreshToken,
   setApiAuthHandlers,
 } from "../../../services/apiClient";
@@ -55,13 +56,6 @@ export function AuthProvider({ children }) {
       try {
         const storedUser = await loadStoredUser();
 
-        if (storedUser && !hasRefreshToken(storedUser.token)) {
-          await clearStoredUser();
-          setUser(null);
-          setAuthError("Sessao local sem refresh token. Entre novamente.");
-          return;
-        }
-
         setUser(storedUser);
       } catch {
         setAuthError("Não foi possível restaurar a sessão local.");
@@ -98,6 +92,16 @@ export function AuthProvider({ children }) {
         }
 
         const profile = await fetchGoogleUser(accessToken);
+        const googleRefreshToken = getRefreshToken(profile?.token);
+
+        console.info(
+          "[auth] Login Google - JSON de retorno:",
+          JSON.stringify(profile, null, 2)
+        );
+        console.info(
+          "[auth] Login Google - refresh token:",
+          googleRefreshToken || "(nao retornado)"
+        );
 
         if (!hasRefreshToken(profile?.token)) {
           throw new Error(
@@ -146,13 +150,20 @@ export function AuthProvider({ children }) {
 
     try {
       const tokenData = await authenticateUser({ username, password });
+      const refreshToken = getRefreshToken(tokenData);
+
+      console.info(
+        "[auth] Login por senha - JSON de retorno:",
+        JSON.stringify(tokenData, null, 2)
+      );
+      console.info(
+        "[auth] Login por senha - refresh token:",
+        refreshToken || "(cookie HttpOnly; nao legivel pelo app)"
+      );
 
       if (!hasRefreshToken(tokenData)) {
         console.info(
-          "[auth] Login por senha nao retornou refresh token. Verifique a resposta de /auth/token/."
-        );
-        throw new Error(
-          "A API nao retornou refresh token. Nao sera possivel renovar a sessao."
+          "[auth] Login por senha nao retornou refresh token no JSON. Usando cookie HttpOnly para renovar a sessao."
         );
       }
 
