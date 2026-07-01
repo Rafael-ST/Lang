@@ -2,6 +2,10 @@ import { createContext, useContext, useEffect, useState } from "react";
 import * as Google from "expo-auth-session/providers/google";
 
 import {
+  hasRefreshToken,
+  setApiAuthHandlers,
+} from "../../../services/apiClient";
+import {
   googleAuthConfig,
   isGoogleAuthConfigured,
 } from "../constants/googleAuthConfig";
@@ -32,9 +36,32 @@ export function AuthProvider({ children }) {
   });
 
   useEffect(() => {
+    setApiAuthHandlers({
+      onSessionExpired: () => {
+        setUser(null);
+        setAuthError("Sua sessão expirou. Entre novamente.");
+        clearStoredUser().catch(() => null);
+      },
+      onUserChange: setUser,
+    });
+
+    return () => {
+      setApiAuthHandlers();
+    };
+  }, []);
+
+  useEffect(() => {
     async function restoreUser() {
       try {
         const storedUser = await loadStoredUser();
+
+        if (storedUser && !hasRefreshToken(storedUser.token)) {
+          await clearStoredUser();
+          setUser(null);
+          setAuthError("Sessao local sem refresh token. Entre novamente.");
+          return;
+        }
+
         setUser(storedUser);
       } catch {
         setAuthError("Não foi possível restaurar a sessão local.");
@@ -71,6 +98,12 @@ export function AuthProvider({ children }) {
         }
 
         const profile = await fetchGoogleUser(accessToken);
+
+        if (!hasRefreshToken(profile?.token)) {
+          throw new Error(
+            "Login Google nao retornou token da API. Use login por senha ou implemente a troca do token Google no backend."
+          );
+        }
 
         setUser(profile);
         await storeUser(profile);
@@ -113,6 +146,16 @@ export function AuthProvider({ children }) {
 
     try {
       const tokenData = await authenticateUser({ username, password });
+
+      if (!hasRefreshToken(tokenData)) {
+        console.info(
+          "[auth] Login por senha nao retornou refresh token. Verifique a resposta de /auth/token/."
+        );
+        throw new Error(
+          "A API nao retornou refresh token. Nao sera possivel renovar a sessao."
+        );
+      }
+
       const authenticatedUser = {
         username,
         token: tokenData,

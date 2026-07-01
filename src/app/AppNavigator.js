@@ -1,7 +1,16 @@
 import { StatusBar } from "expo-status-bar";
-import { Animated, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  Vibration,
+  View,
+} from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAudioPlayer } from "expo-audio";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "../features/auth/context/AuthContext";
@@ -25,15 +34,18 @@ export default function AppNavigator() {
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [selectedSublevel, setSelectedSublevel] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [isManualLoggedIn, setIsManualLoggedIn] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVibrationEnabled, setIsVibrationEnabled] = useState(true);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [profile, setProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const rotation = useRef(new Animated.Value(0)).current;
+  const settingsSoundPlayer = useAudioPlayer(
+    require("../../assets/correct-answer.ogg"),
+    { keepAudioSessionActive: true }
+  );
   const styles = createStyles(colors, shadows);
-  const isLoggedIn = Boolean(user || isManualLoggedIn);
+  const isLoggedIn = Boolean(user);
   const username = user?.username || user?.email;
 
   const rotationStyle = {
@@ -109,6 +121,11 @@ export default function AppNavigator() {
 
   async function handleVibrationChange(nextIsEnabled) {
     setIsVibrationEnabled(nextIsEnabled);
+
+    if (nextIsEnabled) {
+      Vibration.vibrate(250);
+    }
+
     await AsyncStorage.setItem(
       VIBRATION_STORAGE_KEY,
       nextIsEnabled ? "enabled" : "disabled"
@@ -117,10 +134,26 @@ export default function AppNavigator() {
 
   async function handleSoundChange(nextIsEnabled) {
     setIsSoundEnabled(nextIsEnabled);
+
+    if (nextIsEnabled) {
+      playSettingsSound();
+    }
+
     await AsyncStorage.setItem(
       SOUND_STORAGE_KEY,
       nextIsEnabled ? "enabled" : "disabled"
     );
+  }
+
+  function playSettingsSound() {
+    try {
+      settingsSoundPlayer
+        .seekTo(0)
+        .then(() => settingsSoundPlayer.play())
+        .catch(() => settingsSoundPlayer.play());
+    } catch {
+      // Settings feedback should not block saving the preference.
+    }
   }
 
   function handleLogout() {
@@ -130,7 +163,6 @@ export default function AppNavigator() {
       signOut();
     }
 
-    setIsManualLoggedIn(false);
     setProfile(null);
     setSelectedLevel(null);
     setSelectedSublevel(null);
@@ -222,6 +254,7 @@ export default function AppNavigator() {
               isSettingsOpen ? styles.settingsWrapOpen : null,
             ]}
           >
+            <View style={styles.settingsControls}>
             <View style={styles.pointsBadge}>
               <Text style={styles.pointsText}>
                 {isLoadingProfile ? "..." : profile?.pontos ?? 0} pts
@@ -241,6 +274,8 @@ export default function AppNavigator() {
                 />
               </Animated.View>
             </Pressable>
+
+            </View>
 
             {isSettingsOpen ? (
               <View style={styles.settingsPanel}>
@@ -298,7 +333,6 @@ export default function AppNavigator() {
       ) : (
         <LoginScreen
           onForgotPasswordPress={() => setScreen("forgot-password")}
-          onLoginPress={() => setIsManualLoggedIn(true)}
           onRegisterPress={() => setScreen("register")}
         />
       )}
@@ -314,9 +348,13 @@ function createStyles(colors, shadows) {
       right: 18,
       zIndex: 100,
       elevation: 100,
+      alignItems: "flex-end",
+    },
+    settingsControls: {
       flexDirection: "row",
       alignItems: "flex-end",
       gap: 8,
+      alignSelf: "flex-end",
     },
     settingsBackdrop: {
       position: "absolute",
@@ -329,7 +367,7 @@ function createStyles(colors, shadows) {
     },
     settingsWrapOpen: {
       width: 220,
-      height: 282,
+      height: 330,
     },
     settingsButton: {
       width: 48,

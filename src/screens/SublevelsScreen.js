@@ -29,7 +29,7 @@ export default function SublevelsScreen({
       setSublevelsError("");
 
       try {
-        const data = await fetchSublevels();
+        const data = await fetchSublevels(level?.id);
 
         if (isMounted) {
           setSublevels(Array.isArray(data) ? data : []);
@@ -50,7 +50,7 @@ export default function SublevelsScreen({
     return () => {
       isMounted = false;
     };
-  }, [loading]);
+  }, [level?.id, loading]);
 
   return (
     <ScreenContainer contentStyle={styles.container}>
