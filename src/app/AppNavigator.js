@@ -203,9 +203,10 @@ export default function AppNavigator() {
               category={selectedCategory}
               onProfileChange={setProfile}
               soundEnabled={isSoundEnabled}
+              sublevel={selectedSublevel}
               user={user}
               vibrationEnabled={isVibrationEnabled}
-              onBack={() => setScreen("logged")}
+              onBack={() => setScreen("sublevels")}
             />
           ) : screen === "logged" ? (
             <LoggedScreen
@@ -226,7 +227,7 @@ export default function AppNavigator() {
               onSublevelPress={(sublevel) => {
                 setSelectedSublevel(sublevel);
                 setSelectedCategory(null);
-                setScreen("logged");
+                setScreen("category-module");
               }}
             />
           ) : (

@@ -10,106 +10,155 @@ import { useAudioPlayer } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
-import { fetchCardsByCategory } from "../features/cards/services/cardsApi";
+import { fetchExercisesByCategory } from "../features/exercises/services/exercisesApi";
 import {
   fetchProfileByUsername,
   updateProfilePoints,
 } from "../features/profiles/services/profilesApi";
 import { useTheme } from "../theme";
 
+const EXERCISE_TYPES = {
+  JUST_AUDIO: "JUST_AUDIO",
+  MULTIPLE_CHOICE_TRANSLATION: "multiple_choice_translation",
+};
+
 export default function CategoryModuleScreen({
   category,
   onBack,
   onProfileChange,
   soundEnabled = true,
+  sublevel,
   user,
   vibrationEnabled = true,
 }) {
   const { colors, shadows } = useTheme();
-  const [cards, setCards] = useState([]);
-  const [selectedCardIndex, setSelectedCardIndex] = useState(0);
+  const [exercises, setExercises] = useState([]);
+  const [selectedExerciseIndex, setSelectedExerciseIndex] = useState(0);
   const [wrongOptionId, setWrongOptionId] = useState(null);
   const [correctOptionId, setCorrectOptionId] = useState(null);
-  const [isLoadingCards, setIsLoadingCards] = useState(false);
+  const [isJustAudioCorrect, setIsJustAudioCorrect] = useState(false);
+  const [isLoadingExercises, setIsLoadingExercises] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isSpendingPoint, setIsSpendingPoint] = useState(false);
-  const [cardsError, setCardsError] = useState("");
+  const [exercisesError, setExercisesError] = useState("");
   const [profile, setProfile] = useState(null);
   const [pointsError, setPointsError] = useState("");
   const [isExitModalVisible, setIsExitModalVisible] = useState(false);
   const [isNoPointsModalVisible, setIsNoPointsModalVisible] = useState(false);
-  const nextCardTimeout = useRef(null);
+  const nextExerciseTimeout = useRef(null);
   const correctSoundPlayer = useAudioPlayer(
     require("../../assets/correct-answer.ogg"),
     { keepAudioSessionActive: true }
   );
   const styles = createStyles(colors, shadows);
-  const playableCards = useMemo(
-    () =>
-      cards.filter(
-        (card) => card.english_name && card.international_name
-      ),
-    [cards]
+  const playableExercises = useMemo(
+    () => exercises.filter(isSupportedExercise),
+    [exercises]
   );
-  const selectedCard = playableCards[selectedCardIndex];
-  const moduleName = selectedCard?.english_name || category?.nome || "Módulo";
+  const selectedExercise = playableExercises[selectedExerciseIndex];
+  const selectedCard = getExerciseCard(selectedExercise);
+  const exerciseType = getExerciseType(selectedExercise);
+  const moduleName =
+    getExerciseTitle(selectedExercise) ||
+    selectedCard?.english_name ||
+    category?.nome ||
+    sublevel?.nome ||
+    "Modulo";
+  const translationText = getTranslationText(selectedExercise);
+  const audioUri = getAudioUri(selectedExercise);
   const username = user?.username || user?.email;
+  const exerciseAudioPlayer = useAudioPlayer(
+    audioUri ? { uri: audioUri } : null,
+    { keepAudioSessionActive: true }
+  );
   const optionCards = useMemo(() => {
+    if (exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION) {
+      return [];
+    }
+
+    const configuredOptions = getExerciseOptions(selectedExercise);
+
+    if (configuredOptions.length) {
+      return configuredOptions;
+    }
+
     if (!selectedCard?.international_name) {
       return [];
     }
 
     const wrongCards = shuffleItems(
-      playableCards.filter(
-        (card) => card.id !== selectedCard.id && card.international_name
-      )
+      playableExercises
+        .map(getExerciseCard)
+        .filter(
+          (card) => card?.id !== selectedCard.id && card?.international_name
+        )
     );
 
-    return shuffleItems([selectedCard, ...wrongCards.slice(0, 3)]);
-  }, [playableCards, selectedCard]);
+    return shuffleItems([
+      {
+        id: selectedCard.id,
+        text: selectedCard.international_name,
+      },
+      ...wrongCards.slice(0, 3).map((card) => ({
+        id: card.id,
+        text: card.international_name,
+      })),
+    ]);
+  }, [exerciseType, playableExercises, selectedCard, selectedExercise]);
 
   useEffect(() => {
-    if (!category?.id) {
-      setCards([]);
-      return;
-    }
-
     let isMounted = true;
 
-    async function loadCards() {
-      setIsLoadingCards(true);
-      setCardsError("");
+    async function loadExercises() {
+      setIsLoadingExercises(true);
+      setExercisesError("");
 
       try {
-        const data = await fetchCardsByCategory(category.id);
+        const data = await fetchExercisesByCategory(category?.id);
 
         if (isMounted) {
-          const nextCards = Array.isArray(data) ? shuffleItems(data) : [];
+          const nextExercises = normalizeExerciseList(data);
 
-          setCards(nextCards);
-          setSelectedCardIndex(0);
+          console.info("[exercises] Retorno de /exercises/:", data);
+          console.info("[exercises] Exercicios normalizados:", nextExercises);
+
+          setExercises(shuffleItems(nextExercises));
+          setSelectedExerciseIndex(0);
           setWrongOptionId(null);
           setCorrectOptionId(null);
+          setIsJustAudioCorrect(false);
         }
       } catch {
         if (isMounted) {
-          setCards([]);
-          setCardsError("Não foi possível carregar os cards.");
+          setExercises([]);
+          setExercisesError("Nao foi possivel carregar os exercicios.");
         }
       } finally {
         if (isMounted) {
-          setIsLoadingCards(false);
+          setIsLoadingExercises(false);
         }
       }
     }
 
-    loadCards();
+    loadExercises();
 
     return () => {
       isMounted = false;
-      clearTimeout(nextCardTimeout.current);
+      clearTimeout(nextExerciseTimeout.current);
     };
   }, [category?.id]);
+
+  useEffect(() => {
+    if (
+      exerciseType !== EXERCISE_TYPES.JUST_AUDIO ||
+      !soundEnabled ||
+      !audioUri
+    ) {
+      return;
+    }
+
+    playAudio(exerciseAudioPlayer);
+  }, [audioUri, exerciseAudioPlayer, exerciseType, soundEnabled]);
 
   useEffect(() => {
     if (!username) {
@@ -128,14 +177,14 @@ export default function CategoryModuleScreen({
         if (isMounted) {
           setProfile(nextProfile);
           onProfileChange?.(nextProfile);
-          setPointsError(nextProfile ? "" : "Perfil não encontrado.");
+          setPointsError(nextProfile ? "" : "Perfil nao encontrado.");
           setIsNoPointsModalVisible(
             Boolean(nextProfile && nextProfile.pontos <= 0)
           );
         }
       } catch {
         if (isMounted) {
-          setPointsError("Não foi possível carregar seus pontos.");
+          setPointsError("Nao foi possivel carregar seus pontos.");
         }
       } finally {
         if (isMounted) {
@@ -162,7 +211,7 @@ export default function CategoryModuleScreen({
     }
 
     if (!profile) {
-      setPointsError("Perfil não encontrado.");
+      setPointsError("Perfil nao encontrado.");
       return;
     }
 
@@ -171,13 +220,13 @@ export default function CategoryModuleScreen({
       return;
     }
 
-    if (optionCard.id !== selectedCard?.id) {
+    if (!isCorrectOption(optionCard, selectedExercise)) {
       if (vibrationEnabled) {
         Vibration.vibrate(500);
       }
 
       setWrongOptionId(optionCard.id);
-      clearTimeout(nextCardTimeout.current);
+      clearTimeout(nextExerciseTimeout.current);
 
       const nextPoints = await spendPoint();
 
@@ -190,17 +239,17 @@ export default function CategoryModuleScreen({
         return;
       }
 
-      nextCardTimeout.current = setTimeout(() => {
+      nextExerciseTimeout.current = setTimeout(() => {
         setWrongOptionId(null);
-        goToRandomCard();
+        goToRandomExercise();
       }, 700);
       return;
     }
 
     setWrongOptionId(null);
     setCorrectOptionId(optionCard.id);
-    playCorrectSound();
-    clearTimeout(nextCardTimeout.current);
+    playAudio(correctSoundPlayer);
+    clearTimeout(nextExerciseTimeout.current);
 
     const nextPoints = await spendPoint();
 
@@ -213,41 +262,46 @@ export default function CategoryModuleScreen({
       return;
     }
 
-    nextCardTimeout.current = setTimeout(() => {
+    nextExerciseTimeout.current = setTimeout(() => {
       setCorrectOptionId(null);
-      goToRandomCard();
+      goToRandomExercise();
     }, 700);
   }
 
-  function playCorrectSound() {
-    if (!soundEnabled) {
+  async function handleJustAudioNextPress() {
+    if (isLoadingProfile || isSpendingPoint || isJustAudioCorrect) {
       return;
     }
 
-    try {
-      correctSoundPlayer
-        .seekTo(0)
-        .then(() => correctSoundPlayer.play())
-        .catch(() => correctSoundPlayer.play());
-    } catch {
-      // Audio feedback is optional; the answer flow should continue if playback fails.
+    if (!profile) {
+      setPointsError("Perfil nao encontrado.");
+      return;
     }
-  }
 
-  function goToRandomCard() {
-    setSelectedCardIndex((currentIndex) => {
-      if (!playableCards.length) {
-        return 0;
-      }
+    if (profile.pontos <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
 
-      let nextIndex = currentIndex;
+    setIsJustAudioCorrect(true);
+    playAudio(correctSoundPlayer);
 
-      while (nextIndex === currentIndex && playableCards.length > 1) {
-        nextIndex = Math.floor(Math.random() * playableCards.length);
-      }
+    const nextPoints = await spendPoint();
 
-      return nextIndex;
-    });
+    if (nextPoints === null) {
+      setIsJustAudioCorrect(false);
+      return;
+    }
+
+    if (nextPoints <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
+
+    nextExerciseTimeout.current = setTimeout(() => {
+      setIsJustAudioCorrect(false);
+      goToRandomExercise();
+    }, 700);
   }
 
   async function spendPoint() {
@@ -269,12 +323,28 @@ export default function CategoryModuleScreen({
       return nextPoints;
     } catch {
       setCorrectOptionId(null);
-      setPointsError("Não foi possível atualizar seus pontos.");
+      setPointsError("Nao foi possivel atualizar seus pontos.");
 
       return null;
     } finally {
       setIsSpendingPoint(false);
     }
+  }
+
+  function goToRandomExercise() {
+    setSelectedExerciseIndex((currentIndex) => {
+      if (!playableExercises.length) {
+        return 0;
+      }
+
+      let nextIndex = currentIndex;
+
+      while (nextIndex === currentIndex && playableExercises.length > 1) {
+        nextIndex = Math.floor(Math.random() * playableExercises.length);
+      }
+
+      return nextIndex;
+    });
   }
 
   function handleNoPointsBackPress() {
@@ -293,17 +363,58 @@ export default function CategoryModuleScreen({
 
   return (
     <ScreenContainer contentStyle={styles.container}>
-      
-
       <View style={styles.card}>
         <Text style={styles.moduleName}>{moduleName}</Text>
 
-        {isLoadingCards || isLoadingProfile ? (
-          <Text style={styles.helperText}>Carregando cards...</Text>
-        ) : cardsError ? (
-          <Text style={styles.errorText}>{cardsError}</Text>
+        {isLoadingExercises || isLoadingProfile ? (
+          <Text style={styles.helperText}>Carregando exercicios...</Text>
+        ) : exercisesError ? (
+          <Text style={styles.errorText}>{exercisesError}</Text>
         ) : pointsError ? (
           <Text style={styles.errorText}>{pointsError}</Text>
+        ) : !exercises.length ? (
+          <Text style={styles.helperText}>Nenhum exercicio encontrado.</Text>
+        ) : !playableExercises.length ? (
+          <Text style={styles.helperText}>
+            Nenhum exercicio compativel encontrado.
+          </Text>
+        ) : exerciseType === EXERCISE_TYPES.JUST_AUDIO ? (
+          <View style={styles.justAudioContent}>
+            <Pressable
+              disabled={!audioUri}
+              style={({ pressed }) => [
+                styles.audioButton,
+                pressed && audioUri ? styles.audioButtonPressed : null,
+                !audioUri ? styles.disabledButton : null,
+              ]}
+              onPress={() => playAudio(exerciseAudioPlayer)}
+            >
+              <Text style={styles.audioButtonText}>
+                {audioUri ? "Ouvir audio" : "Audio indisponivel"}
+              </Text>
+            </Pressable>
+
+            <Text style={styles.translationText}>
+              {translationText || "Traducao indisponivel"}
+            </Text>
+
+            <Pressable
+              disabled={isSpendingPoint}
+              style={({ pressed }) => [
+                styles.nextButton,
+                isJustAudioCorrect ? styles.nextButtonCorrect : null,
+                pressed ? styles.nextButtonPressed : null,
+                isSpendingPoint && !isJustAudioCorrect
+                  ? styles.disabledButton
+                  : null,
+              ]}
+              onPress={handleJustAudioNextPress}
+            >
+              <Text style={styles.nextButtonText}>
+                {isSpendingPoint ? "Avancando..." : "Proximo"}
+              </Text>
+            </Pressable>
+          </View>
         ) : optionCards.length ? (
           <View style={styles.optionsList}>
             {optionCards.map((card) => (
@@ -325,12 +436,12 @@ export default function CategoryModuleScreen({
                 ]}
                 onPress={() => handleOptionPress(card)}
               >
-                <Text style={styles.optionText}>{card.international_name}</Text>
+                <Text style={styles.optionText}>{card.text}</Text>
               </Pressable>
             ))}
           </View>
         ) : (
-          <Text style={styles.helperText}>Nenhum card encontrado.</Text>
+          <Text style={styles.helperText}>Nenhum exercicio encontrado.</Text>
         )}
 
         <Pressable
@@ -351,7 +462,7 @@ export default function CategoryModuleScreen({
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Sem pontos</Text>
             <Text style={styles.modalText}>
-              Você não tem mais pontos para continuar esta lição.
+              Voce nao tem mais pontos para continuar esta licao.
             </Text>
             <Pressable
               style={styles.modalButton}
@@ -371,9 +482,9 @@ export default function CategoryModuleScreen({
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Sair da lição?</Text>
+            <Text style={styles.modalTitle}>Sair da licao?</Text>
             <Text style={styles.modalText}>
-              Caso saia você perderá o progresso dessa lição.
+              Caso saia voce perdera o progresso dessa licao.
             </Text>
             <View style={styles.modalActions}>
               <Pressable
@@ -403,6 +514,172 @@ export default function CategoryModuleScreen({
   );
 }
 
+function playAudio(player) {
+  try {
+    player
+      .seekTo(0)
+      .then(() => player.play())
+      .catch(() => player.play());
+  } catch {
+    // Audio feedback is optional; the exercise flow should continue if playback fails.
+  }
+}
+
+function isSupportedExercise(exercise) {
+  const type = getExerciseType(exercise);
+
+  return (
+    type === EXERCISE_TYPES.JUST_AUDIO ||
+    type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION
+  );
+}
+
+function getExerciseType(exercise) {
+  const type = String(exercise?.type || "")
+    .trim()
+    .toUpperCase();
+
+  if (type === "JUST_AUDIO") {
+    return EXERCISE_TYPES.JUST_AUDIO;
+  }
+
+  if (
+    type === "MULTIPLE_CHOICE_TRANSLATION" ||
+    type === "MULTIPLE-CHOICE-TRANSLATION"
+  ) {
+    return EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION;
+  }
+
+  return exercise?.type || "";
+}
+
+function getExerciseCard(exercise) {
+  if (exercise?.card_detail && typeof exercise.card_detail === "object") {
+    return exercise.card_detail;
+  }
+
+  if (exercise?.card && typeof exercise.card === "object") {
+    return exercise.card;
+  }
+
+  return null;
+}
+
+function getExerciseTitle(exercise) {
+  const card = getExerciseCard(exercise);
+
+  if (getExerciseType(exercise) === EXERCISE_TYPES.JUST_AUDIO) {
+    return card?.english_name || getPromptText(exercise);
+  }
+
+  return getPromptText(exercise) || card?.english_name || "";
+}
+
+function getPromptText(exercise) {
+  const prompt = parseMaybeJson(exercise?.prompt);
+
+  if (typeof prompt === "string") {
+    return prompt;
+  }
+
+  return prompt?.text || prompt?.english_name || "";
+}
+
+function getTranslationText(exercise) {
+  const card = getExerciseCard(exercise);
+  const answerConfig = parseMaybeJson(exercise?.answer_config);
+
+  if (typeof answerConfig === "string") {
+    return answerConfig;
+  }
+
+  return (
+    answerConfig?.translation ||
+    answerConfig?.correct_text ||
+    card?.international_name ||
+    ""
+  );
+}
+
+function getAudioUri(exercise) {
+  const card = getExerciseCard(exercise);
+  const prompt = parseMaybeJson(exercise?.prompt);
+
+  if (prompt && typeof prompt === "object" && prompt.audio_url) {
+    return prompt.audio_url;
+  }
+
+  return card?.audio_url || card?.audio || "";
+}
+
+function getExerciseOptions(exercise) {
+  const rawOptions = parseMaybeJson(exercise?.options);
+
+  if (!Array.isArray(rawOptions)) {
+    return [];
+  }
+
+  return rawOptions
+    .map((option) => {
+      if (typeof option === "string") {
+        return {
+          id: option,
+          text: option,
+        };
+      }
+
+      return {
+        id: option.id || option.card || option.value || option.text,
+        text: option.text || option.international_name || option.label,
+      };
+    })
+    .filter((option) => option.id && option.text);
+}
+
+function isCorrectOption(option, exercise) {
+  const card = getExerciseCard(exercise);
+  const answerConfig = parseMaybeJson(exercise?.answer_config);
+  const correctId =
+    answerConfig?.correct_option_id ||
+    answerConfig?.correct_card_id ||
+    answerConfig?.card ||
+    card?.id;
+  const correctText =
+    answerConfig?.correct_text ||
+    answerConfig?.translation ||
+    card?.international_name;
+
+  return option.id === correctId || option.text === correctText;
+}
+
+function parseMaybeJson(value) {
+  if (!value || typeof value !== "string") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeExerciseList(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.results)) {
+    return data.results;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
+}
+
 function shuffleItems(items) {
   return [...items].sort(() => Math.random() - 0.5);
 }
@@ -416,18 +693,6 @@ function createStyles(colors, shadows) {
       paddingTop: 96,
       paddingBottom: 24,
     },
-    header: {
-      width: "100%",
-      maxWidth: 340,
-      marginBottom: 20,
-    },
-    title: {
-      color: colors.textPrimary,
-      fontSize: 30,
-      fontWeight: "800",
-      textAlign: "center",
-      marginBottom: 8,
-    },
     card: {
       width: "100%",
       maxWidth: 340,
@@ -440,13 +705,63 @@ function createStyles(colors, shadows) {
     },
     moduleName: {
       color: colors.textPrimary,
-      fontSize: 22,
+      fontSize: 34,
       fontWeight: "800",
       textAlign: "center",
       minHeight: 96,
       textAlignVertical: "center",
       paddingVertical: 24,
       marginBottom: 20,
+    },
+    justAudioContent: {
+      gap: 16,
+      marginBottom: 18,
+    },
+    audioButton: {
+      height: 52,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    audioButtonPressed: {
+      backgroundColor: colors.surfaceMuted,
+    },
+    audioButtonText: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "800",
+    },
+    translationText: {
+      color: colors.textSecondary,
+      fontSize: 20,
+      fontWeight: "800",
+      lineHeight: 28,
+      textAlign: "center",
+    },
+    nextButton: {
+      height: 52,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.textPrimary,
+      ...shadows.soft,
+    },
+    nextButtonPressed: {
+      opacity: 0.9,
+    },
+    nextButtonCorrect: {
+      backgroundColor: colors.success,
+    },
+    nextButtonText: {
+      color: colors.surfaceMuted,
+      fontSize: 15,
+      fontWeight: "800",
+    },
+    disabledButton: {
+      opacity: 0.56,
     },
     optionsList: {
       flexDirection: "row",
