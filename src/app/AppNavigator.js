@@ -20,6 +20,7 @@ import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 import LearningLevelsScreen from "../screens/LearningLevelsScreen";
 import SublevelsScreen from "../screens/SublevelsScreen";
+import ExerciseSetsScreen from "../screens/ExerciseSetsScreen";
 import CategoryModuleScreen from "../screens/CategoryModuleScreen";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
 import { useTheme } from "../theme";
@@ -33,6 +34,7 @@ export default function AppNavigator() {
   const [screen, setScreen] = useState("login");
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [selectedSublevel, setSelectedSublevel] = useState(null);
+  const [selectedExerciseSet, setSelectedExerciseSet] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVibrationEnabled, setIsVibrationEnabled] = useState(true);
@@ -166,6 +168,7 @@ export default function AppNavigator() {
     setProfile(null);
     setSelectedLevel(null);
     setSelectedSublevel(null);
+    setSelectedExerciseSet(null);
     setSelectedCategory(null);
     setScreen("login");
   }
@@ -201,12 +204,26 @@ export default function AppNavigator() {
           {screen === "category-module" ? (
             <CategoryModuleScreen
               category={selectedCategory}
+              exerciseSet={selectedExerciseSet}
               onProfileChange={setProfile}
               soundEnabled={isSoundEnabled}
               sublevel={selectedSublevel}
               user={user}
               vibrationEnabled={isVibrationEnabled}
-              onBack={() => setScreen("sublevels")}
+              onBack={() => setScreen("exercise-sets")}
+            />
+          ) : screen === "exercise-sets" ? (
+            <ExerciseSetsScreen
+              sublevel={selectedSublevel}
+              onBack={() => {
+                setSelectedExerciseSet(null);
+                setScreen("sublevels");
+              }}
+              onExerciseSetPress={(exerciseSet) => {
+                setSelectedExerciseSet(exerciseSet);
+                setSelectedCategory(null);
+                setScreen("category-module");
+              }}
             />
           ) : screen === "logged" ? (
             <LoggedScreen
@@ -222,12 +239,14 @@ export default function AppNavigator() {
               level={selectedLevel}
               onBack={() => {
                 setSelectedSublevel(null);
+                setSelectedExerciseSet(null);
                 setScreen("levels");
               }}
               onSublevelPress={(sublevel) => {
                 setSelectedSublevel(sublevel);
+                setSelectedExerciseSet(null);
                 setSelectedCategory(null);
-                setScreen("category-module");
+                setScreen("exercise-sets");
               }}
             />
           ) : (
@@ -235,6 +254,7 @@ export default function AppNavigator() {
               onLevelPress={(level) => {
                 setSelectedLevel(level);
                 setSelectedSublevel(null);
+                setSelectedExerciseSet(null);
                 setSelectedCategory(null);
                 setScreen("sublevels");
               }}

@@ -10,7 +10,11 @@ import { useAudioPlayer } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
-import { fetchExercisesByCategory } from "../features/exercises/services/exercisesApi";
+import {
+  completeExercise,
+  fetchExercisesBySet,
+} from "../features/exercises/services/exercisesApi";
+import { resetExerciseSet } from "../features/exerciseSets/services/exerciseSetsApi";
 import {
   fetchProfileByUsername,
   updateProfilePoints,
@@ -24,6 +28,7 @@ const EXERCISE_TYPES = {
 
 export default function CategoryModuleScreen({
   category,
+  exerciseSet,
   onBack,
   onProfileChange,
   soundEnabled = true,
@@ -36,6 +41,9 @@ export default function CategoryModuleScreen({
   const [selectedExerciseIndex, setSelectedExerciseIndex] = useState(0);
   const [wrongOptionId, setWrongOptionId] = useState(null);
   const [correctOptionId, setCorrectOptionId] = useState(null);
+  const [completedExerciseIds, setCompletedExerciseIds] = useState([]);
+  const [postponedExerciseIds, setPostponedExerciseIds] = useState([]);
+  const [isSetCompleted, setIsSetCompleted] = useState(false);
   const [isJustAudioCorrect, setIsJustAudioCorrect] = useState(false);
   const [isLoadingExercises, setIsLoadingExercises] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
@@ -55,12 +63,29 @@ export default function CategoryModuleScreen({
     () => exercises.filter(isSupportedExercise),
     [exercises]
   );
-  const selectedExercise = playableExercises[selectedExerciseIndex];
+  const pendingExercises = useMemo(
+    () => {
+      const pending = playableExercises.filter(
+        (exercise) => !completedExerciseIds.includes(exercise.id)
+      );
+      const regular = pending.filter(
+        (exercise) => !postponedExerciseIds.includes(exercise.id)
+      );
+      const postponed = pending.filter((exercise) =>
+        postponedExerciseIds.includes(exercise.id)
+      );
+
+      return [...regular, ...postponed];
+    },
+    [completedExerciseIds, playableExercises, postponedExerciseIds]
+  );
+  const selectedExercise = pendingExercises[selectedExerciseIndex];
   const selectedCard = getExerciseCard(selectedExercise);
   const exerciseType = getExerciseType(selectedExercise);
   const moduleName =
     getExerciseTitle(selectedExercise) ||
     selectedCard?.english_name ||
+    exerciseSet?.title ||
     category?.nome ||
     sublevel?.nome ||
     "Modulo";
@@ -114,7 +139,7 @@ export default function CategoryModuleScreen({
       setExercisesError("");
 
       try {
-        const data = await fetchExercisesByCategory(category?.id);
+        const data = await fetchExercisesBySet(exerciseSet?.id);
 
         if (isMounted) {
           const nextExercises = normalizeExerciseList(data);
@@ -124,6 +149,11 @@ export default function CategoryModuleScreen({
 
           setExercises(shuffleItems(nextExercises));
           setSelectedExerciseIndex(0);
+          setCompletedExerciseIds([]);
+          setPostponedExerciseIds([]);
+          setIsSetCompleted(
+            isExerciseSetCompleted(exerciseSet) || nextExercises.length === 0
+          );
           setWrongOptionId(null);
           setCorrectOptionId(null);
           setIsJustAudioCorrect(false);
@@ -146,7 +176,7 @@ export default function CategoryModuleScreen({
       isMounted = false;
       clearTimeout(nextExerciseTimeout.current);
     };
-  }, [category?.id]);
+  }, [exerciseSet]);
 
   useEffect(() => {
     if (
@@ -228,9 +258,21 @@ export default function CategoryModuleScreen({
       setWrongOptionId(optionCard.id);
       clearTimeout(nextExerciseTimeout.current);
 
+      const completeResult = await completeCurrentExercise({
+        answer: { selected_option_id: optionCard.id, selected_text: optionCard.text },
+        is_correct: false,
+      });
       const nextPoints = await spendPoint();
 
-      if (nextPoints === null) {
+      if (completeResult === null || nextPoints === null) {
+        return;
+      }
+
+      if (completeResult?.set_completed) {
+        nextExerciseTimeout.current = setTimeout(() => {
+          setWrongOptionId(null);
+          goToNextExercise(completeResult, false);
+        }, 700);
         return;
       }
 
@@ -241,7 +283,7 @@ export default function CategoryModuleScreen({
 
       nextExerciseTimeout.current = setTimeout(() => {
         setWrongOptionId(null);
-        goToRandomExercise();
+        goToNextExercise(completeResult, false);
       }, 700);
       return;
     }
@@ -251,10 +293,22 @@ export default function CategoryModuleScreen({
     playAudio(correctSoundPlayer);
     clearTimeout(nextExerciseTimeout.current);
 
+    const completeResult = await completeCurrentExercise({
+      answer: { selected_option_id: optionCard.id, selected_text: optionCard.text },
+      is_correct: true,
+    });
     const nextPoints = await spendPoint();
 
-    if (nextPoints === null) {
+    if (completeResult === null || nextPoints === null) {
       return;
+    }
+
+    if (completeResult?.set_completed) {
+        nextExerciseTimeout.current = setTimeout(() => {
+          setCorrectOptionId(null);
+          goToNextExercise(completeResult, true);
+        }, 700);
+        return;
     }
 
     if (nextPoints <= 0) {
@@ -264,7 +318,7 @@ export default function CategoryModuleScreen({
 
     nextExerciseTimeout.current = setTimeout(() => {
       setCorrectOptionId(null);
-      goToRandomExercise();
+      goToNextExercise(completeResult, true);
     }, 700);
   }
 
@@ -286,10 +340,22 @@ export default function CategoryModuleScreen({
     setIsJustAudioCorrect(true);
     playAudio(correctSoundPlayer);
 
+    const completeResult = await completeCurrentExercise({
+      answer: {},
+      is_correct: true,
+    });
     const nextPoints = await spendPoint();
 
-    if (nextPoints === null) {
+    if (completeResult === null || nextPoints === null) {
       setIsJustAudioCorrect(false);
+      return;
+    }
+
+    if (completeResult?.set_completed) {
+      nextExerciseTimeout.current = setTimeout(() => {
+        setIsJustAudioCorrect(false);
+        goToNextExercise(completeResult, true);
+      }, 700);
       return;
     }
 
@@ -300,8 +366,25 @@ export default function CategoryModuleScreen({
 
     nextExerciseTimeout.current = setTimeout(() => {
       setIsJustAudioCorrect(false);
-      goToRandomExercise();
+      goToNextExercise(completeResult, true);
     }, 700);
+  }
+
+  async function completeCurrentExercise(payload) {
+    if (!selectedExercise?.id) {
+      return null;
+    }
+
+    try {
+      return await completeExercise(selectedExercise.id, payload);
+    } catch {
+      setCorrectOptionId(null);
+      setWrongOptionId(null);
+      setIsJustAudioCorrect(false);
+      setPointsError("Nao foi possivel registrar o exercicio.");
+
+      return null;
+    }
   }
 
   async function spendPoint() {
@@ -331,24 +414,55 @@ export default function CategoryModuleScreen({
     }
   }
 
-  function goToRandomExercise() {
-    setSelectedExerciseIndex((currentIndex) => {
-      if (!playableExercises.length) {
-        return 0;
-      }
+  function goToNextExercise(completeResult, wasCorrect) {
+    if (!selectedExercise?.id) {
+      return;
+    }
 
-      let nextIndex = currentIndex;
+    if (!wasCorrect) {
+      setPostponedExerciseIds((currentIds) => [
+        ...new Set([...currentIds, selectedExercise.id]),
+      ]);
+      setSelectedExerciseIndex(0);
+      return;
+    }
 
-      while (nextIndex === currentIndex && playableExercises.length > 1) {
-        nextIndex = Math.floor(Math.random() * playableExercises.length);
-      }
+    if (completeResult?.set_completed || pendingExercises.length <= 1) {
+      setCompletedExerciseIds((currentIds) => [
+        ...new Set([...currentIds, selectedExercise.id]),
+      ]);
+      setPostponedExerciseIds((currentIds) =>
+        currentIds.filter((id) => id !== selectedExercise.id)
+      );
+      setIsSetCompleted(true);
+      setSelectedExerciseIndex(0);
+      return;
+    }
 
-      return nextIndex;
-    });
+    setCompletedExerciseIds((currentIds) => [
+      ...new Set([...currentIds, selectedExercise.id]),
+    ]);
+    setPostponedExerciseIds((currentIds) =>
+      currentIds.filter((id) => id !== selectedExercise.id)
+    );
+    setSelectedExerciseIndex(0);
   }
 
-  function handleNoPointsBackPress() {
+  async function resetCurrentExerciseSetIfNeeded() {
+    if (!exerciseSet?.id || isSetCompleted) {
+      return;
+    }
+
+    try {
+      await resetExerciseSet(exerciseSet.id);
+    } catch {
+      // Leaving the lesson should not be blocked if the reset request fails.
+    }
+  }
+
+  async function handleNoPointsBackPress() {
     setIsNoPointsModalVisible(false);
+    await resetCurrentExerciseSetIfNeeded();
     onBack?.();
   }
 
@@ -356,13 +470,25 @@ export default function CategoryModuleScreen({
     setIsExitModalVisible(false);
   }
 
-  function handleExitConfirmPress() {
+  async function handleExitConfirmPress() {
     setIsExitModalVisible(false);
+    await resetCurrentExerciseSetIfNeeded();
     onBack?.();
   }
 
   return (
     <ScreenContainer contentStyle={styles.container}>
+      {isSetCompleted ? (
+        <View style={styles.card}>
+          <Text style={styles.moduleName}>Parabens!</Text>
+          <Text style={styles.translationText}>
+            Voce concluiu este conjunto de exercicios.
+          </Text>
+          <Pressable style={styles.nextButton} onPress={onBack}>
+            <Text style={styles.nextButtonText}>Voltar</Text>
+          </Pressable>
+        </View>
+      ) : (
       <View style={styles.card}>
         <Text style={styles.moduleName}>{moduleName}</Text>
 
@@ -374,7 +500,7 @@ export default function CategoryModuleScreen({
           <Text style={styles.errorText}>{pointsError}</Text>
         ) : !exercises.length ? (
           <Text style={styles.helperText}>Nenhum exercicio encontrado.</Text>
-        ) : !playableExercises.length ? (
+        ) : !pendingExercises.length ? (
           <Text style={styles.helperText}>
             Nenhum exercicio compativel encontrado.
           </Text>
@@ -448,9 +574,10 @@ export default function CategoryModuleScreen({
           style={styles.backButton}
           onPress={() => setIsExitModalVisible(true)}
         >
-          <Text style={styles.backButtonText}>Voltar para categorias</Text>
+          <Text style={styles.backButtonText}>Voltar para exercicios</Text>
         </Pressable>
       </View>
+      )}
 
       <Modal
         animationType="fade"
@@ -678,6 +805,13 @@ function normalizeExerciseList(data) {
   }
 
   return [];
+}
+
+function isExerciseSetCompleted(exerciseSet) {
+  return (
+    exerciseSet?.is_completed ||
+    exerciseSet?.progress?.status === "completed"
+  );
 }
 
 function shuffleItems(items) {
