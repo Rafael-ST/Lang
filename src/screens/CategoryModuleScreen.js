@@ -3,6 +3,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   Vibration,
   View,
 } from "react-native";
@@ -10,6 +11,7 @@ import { useAudioPlayer } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
+import { API_BASE_URL } from "../config/api";
 import {
   completeExercise,
   fetchExercisesBySet,
@@ -24,6 +26,9 @@ import { useTheme } from "../theme";
 const EXERCISE_TYPES = {
   JUST_AUDIO: "JUST_AUDIO",
   MULTIPLE_CHOICE_TRANSLATION: "multiple_choice_translation",
+  SPEAK_WRITTEN_TEXT: "speak_written_text",
+  WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
+  WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
 };
 
 export default function CategoryModuleScreen({
@@ -45,6 +50,12 @@ export default function CategoryModuleScreen({
   const [postponedExerciseIds, setPostponedExerciseIds] = useState([]);
   const [isSetCompleted, setIsSetCompleted] = useState(false);
   const [isJustAudioCorrect, setIsJustAudioCorrect] = useState(false);
+  const [typedAnswer, setTypedAnswer] = useState("");
+  const [typedAnswerStatus, setTypedAnswerStatus] = useState(null);
+  const [spokenTranscript, setSpokenTranscript] = useState("");
+  const [spokenAnswerStatus, setSpokenAnswerStatus] = useState(null);
+  const [isListeningSpeech, setIsListeningSpeech] = useState(false);
+  const [speechError, setSpeechError] = useState("");
   const [isLoadingExercises, setIsLoadingExercises] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isSpendingPoint, setIsSpendingPoint] = useState(false);
@@ -90,12 +101,14 @@ export default function CategoryModuleScreen({
     sublevel?.nome ||
     "Modulo";
   const translationText = getTranslationText(selectedExercise);
+  const expectedTranscript = getExpectedTranscript(selectedExercise);
   const audioUri = getAudioUri(selectedExercise);
   const username = user?.username || user?.email;
   const exerciseAudioPlayer = useAudioPlayer(
-    audioUri ? { uri: audioUri } : null,
+    null,
     { keepAudioSessionActive: true }
   );
+  const speechRecognition = useMemo(() => getSpeechRecognitionModule(), []);
   const optionCards = useMemo(() => {
     if (exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION) {
       return [];
@@ -132,6 +145,45 @@ export default function CategoryModuleScreen({
   }, [exerciseType, playableExercises, selectedCard, selectedExercise]);
 
   useEffect(() => {
+    if (!speechRecognition) {
+      return undefined;
+    }
+
+    const startSubscription = speechRecognition.addListener("start", () => {
+      setIsListeningSpeech(true);
+      setSpeechError("");
+    });
+    const endSubscription = speechRecognition.addListener("end", () => {
+      setIsListeningSpeech(false);
+    });
+    const resultSubscription = speechRecognition.addListener("result", (event) => {
+      const transcript = event.results?.[0]?.transcript || "";
+
+      if (transcript) {
+        setSpokenTranscript(transcript);
+      }
+    });
+    const errorSubscription = speechRecognition.addListener("error", (event) => {
+      setIsListeningSpeech(false);
+
+      if (event.error === "aborted") {
+        return;
+      }
+
+      setSpeechError(
+        event.message || "Nao foi possivel reconhecer sua fala. Tente novamente."
+      );
+    });
+
+    return () => {
+      startSubscription.remove();
+      endSubscription.remove();
+      resultSubscription.remove();
+      errorSubscription.remove();
+    };
+  }, [speechRecognition]);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function loadExercises() {
@@ -157,6 +209,11 @@ export default function CategoryModuleScreen({
           setWrongOptionId(null);
           setCorrectOptionId(null);
           setIsJustAudioCorrect(false);
+          setTypedAnswer("");
+          setTypedAnswerStatus(null);
+          setSpokenTranscript("");
+          setSpokenAnswerStatus(null);
+          setSpeechError("");
         }
       } catch {
         if (isMounted) {
@@ -179,8 +236,16 @@ export default function CategoryModuleScreen({
   }, [exerciseSet]);
 
   useEffect(() => {
+    try {
+      exerciseAudioPlayer.replace(audioUri ? { uri: audioUri } : null);
+    } catch (error) {
+      console.warn("[audio] Nao foi possivel carregar o audio:", audioUri, error);
+    }
+  }, [audioUri, exerciseAudioPlayer]);
+
+  useEffect(() => {
     if (
-      exerciseType !== EXERCISE_TYPES.JUST_AUDIO ||
+      !isAudioFirstExerciseType(exerciseType) ||
       !soundEnabled ||
       !audioUri
     ) {
@@ -189,6 +254,20 @@ export default function CategoryModuleScreen({
 
     playAudio(exerciseAudioPlayer);
   }, [audioUri, exerciseAudioPlayer, exerciseType, soundEnabled]);
+
+  useEffect(() => {
+    setTypedAnswer("");
+    setTypedAnswerStatus(null);
+    setSpokenTranscript("");
+    setSpokenAnswerStatus(null);
+    setSpeechError("");
+
+    try {
+      speechRecognition?.abort();
+    } catch {
+      // Speech recognition may already be inactive.
+    }
+  }, [selectedExercise?.id, speechRecognition]);
 
   useEffect(() => {
     if (!username) {
@@ -370,6 +449,263 @@ export default function CategoryModuleScreen({
     }, 700);
   }
 
+  async function handleWrittenAnswerSubmit() {
+    if (
+      isLoadingProfile ||
+      isSpendingPoint ||
+      typedAnswerStatus === "correct" ||
+      typedAnswerStatus === "wrong"
+    ) {
+      return;
+    }
+
+    if (!profile) {
+      setPointsError("Perfil nao encontrado.");
+      return;
+    }
+
+    if (profile.pontos <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
+
+    const isCorrect = isCorrectWrittenAnswer(typedAnswer, selectedExercise);
+
+    if (!isCorrect && vibrationEnabled) {
+      Vibration.vibrate(500);
+    }
+
+    setTypedAnswerStatus(isCorrect ? "correct" : "wrong");
+
+    if (isCorrect) {
+      playAudio(correctSoundPlayer);
+    }
+
+    clearTimeout(nextExerciseTimeout.current);
+
+    const completeResult = await completeCurrentExercise({
+      answer: { text: typedAnswer },
+      is_correct: isCorrect,
+    });
+    const nextPoints = await spendPoint();
+
+    if (completeResult === null || nextPoints === null) {
+      setTypedAnswerStatus(null);
+      return;
+    }
+
+    if (completeResult?.set_completed) {
+      nextExerciseTimeout.current = setTimeout(() => {
+        setTypedAnswer("");
+        setTypedAnswerStatus(null);
+        goToNextExercise(completeResult, isCorrect);
+      }, 700);
+      return;
+    }
+
+    if (nextPoints <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
+
+    nextExerciseTimeout.current = setTimeout(() => {
+      setTypedAnswer("");
+      setTypedAnswerStatus(null);
+      goToNextExercise(completeResult, isCorrect);
+    }, 700);
+  }
+
+  async function handleSpeechStartPress() {
+    if (
+      isLoadingProfile ||
+      isSpendingPoint ||
+      spokenAnswerStatus === "correct" ||
+      spokenAnswerStatus === "wrong"
+    ) {
+      return;
+    }
+
+    if (isListeningSpeech) {
+      speechRecognition?.stop();
+      return;
+    }
+
+    setSpeechError("");
+    setSpokenTranscript("");
+    setSpokenAnswerStatus(null);
+
+    try {
+      if (!speechRecognition) {
+        setSpeechError(
+          "Reconhecimento de fala ainda nao esta no app instalado. Recompile o Android."
+        );
+        return;
+      }
+
+      if (!speechRecognition.isRecognitionAvailable()) {
+        setSpeechError("Reconhecimento de fala indisponivel neste aparelho.");
+        return;
+      }
+
+      const permission = await speechRecognition.requestPermissionsAsync();
+
+      if (!permission.granted) {
+        setSpeechError("Permissao de microfone/reconhecimento de fala negada.");
+        return;
+      }
+
+      speechRecognition.start({
+        lang: getSpeechRecognitionLanguage(selectedExercise),
+        interimResults: true,
+        maxAlternatives: 3,
+        continuous: false,
+        contextualStrings: getAcceptedSpokenAnswers(selectedExercise),
+      });
+    } catch (error) {
+      setIsListeningSpeech(false);
+      setSpeechError("Nao foi possivel iniciar o reconhecimento de fala.");
+      console.warn("[speech] Nao foi possivel iniciar:", error);
+    }
+  }
+
+  async function handleSpeechAnswerSubmit() {
+    if (
+      isLoadingProfile ||
+      isSpendingPoint ||
+      isListeningSpeech ||
+      spokenAnswerStatus === "correct" ||
+      spokenAnswerStatus === "wrong"
+    ) {
+      return;
+    }
+
+    if (!profile) {
+      setPointsError("Perfil nao encontrado.");
+      return;
+    }
+
+    if (profile.pontos <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
+
+    const isCorrect = isCorrectSpokenAnswer(spokenTranscript, selectedExercise);
+
+    if (!isCorrect && vibrationEnabled) {
+      Vibration.vibrate(500);
+    }
+
+    setSpokenAnswerStatus(isCorrect ? "correct" : "wrong");
+
+    if (isCorrect) {
+      playAudio(correctSoundPlayer);
+    }
+
+    clearTimeout(nextExerciseTimeout.current);
+
+    const completeResult = await completeCurrentExercise({
+      answer: {
+        transcript: spokenTranscript,
+        expected_transcript: expectedTranscript,
+      },
+      is_correct: isCorrect,
+    });
+    const nextPoints = await spendPoint();
+
+    if (completeResult === null || nextPoints === null) {
+      setSpokenAnswerStatus(null);
+      return;
+    }
+
+    if (completeResult?.set_completed) {
+      nextExerciseTimeout.current = setTimeout(() => {
+        setSpokenTranscript("");
+        setSpokenAnswerStatus(null);
+        goToNextExercise(completeResult, isCorrect);
+      }, 700);
+      return;
+    }
+
+    if (nextPoints <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
+
+    nextExerciseTimeout.current = setTimeout(() => {
+      setSpokenTranscript("");
+      setSpokenAnswerStatus(null);
+      goToNextExercise(completeResult, isCorrect);
+    }, 700);
+  }
+
+  async function handleSpeechSkipPress() {
+    if (
+      isLoadingProfile ||
+      isSpendingPoint ||
+      isListeningSpeech ||
+      spokenAnswerStatus === "correct" ||
+      spokenAnswerStatus === "wrong"
+    ) {
+      return;
+    }
+
+    if (!profile) {
+      setPointsError("Perfil nao encontrado.");
+      return;
+    }
+
+    if (profile.pontos <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
+
+    setSpeechError("");
+    setSpokenTranscript("");
+    setSpokenAnswerStatus("correct");
+    clearTimeout(nextExerciseTimeout.current);
+
+    try {
+      speechRecognition?.abort();
+    } catch {
+      // Speech recognition may already be inactive.
+    }
+
+    const completeResult = await completeCurrentExercise({
+      answer: {
+        skipped: true,
+        reason: "user_cannot_speak_now",
+        expected_transcript: expectedTranscript,
+      },
+      is_correct: true,
+    });
+    const nextPoints = await spendPoint();
+
+    if (completeResult === null || nextPoints === null) {
+      setSpokenAnswerStatus(null);
+      return;
+    }
+
+    if (completeResult?.set_completed) {
+      nextExerciseTimeout.current = setTimeout(() => {
+        setSpokenTranscript("");
+        setSpokenAnswerStatus(null);
+        goToNextExercise(completeResult, true);
+      }, 700);
+      return;
+    }
+
+    if (nextPoints <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
+
+    nextExerciseTimeout.current = setTimeout(() => {
+      setSpokenTranscript("");
+      setSpokenAnswerStatus(null);
+      goToNextExercise(completeResult, true);
+    }, 700);
+  }
+
   async function completeCurrentExercise(payload) {
     if (!selectedExercise?.id) {
       return null;
@@ -381,6 +717,8 @@ export default function CategoryModuleScreen({
       setCorrectOptionId(null);
       setWrongOptionId(null);
       setIsJustAudioCorrect(false);
+      setTypedAnswerStatus(null);
+      setSpokenAnswerStatus(null);
       setPointsError("Nao foi possivel registrar o exercicio.");
 
       return null;
@@ -480,18 +818,19 @@ export default function CategoryModuleScreen({
     <ScreenContainer contentStyle={styles.container}>
       {isSetCompleted ? (
         <View style={styles.card}>
-          <Text style={styles.moduleName}>Parabens!</Text>
+          <Text style={styles.moduleName}>Parabéns!</Text>
           <Text style={styles.translationText}>
-            Voce concluiu este conjunto de exercicios.
+            Você concluiu este conjunto de exercicios.
           </Text>
           <Pressable style={styles.nextButton} onPress={onBack}>
             <Text style={styles.nextButtonText}>Voltar</Text>
           </Pressable>
         </View>
       ) : (
-      <View style={styles.card}>
+      <View style={[styles.card, styles.exerciseCard]}>
         <Text style={styles.moduleName}>{moduleName}</Text>
 
+        <View style={styles.exerciseBody}>
         {isLoadingExercises || isLoadingProfile ? (
           <Text style={styles.helperText}>Carregando exercicios...</Text>
         ) : exercisesError ? (
@@ -541,6 +880,165 @@ export default function CategoryModuleScreen({
               </Text>
             </Pressable>
           </View>
+        ) : isWrittenAnswerExerciseType(exerciseType) ? (
+          <View style={styles.writtenAnswerContent}>
+            {audioUri ? (
+              <Pressable
+                disabled={!audioUri}
+                style={({ pressed }) => [
+                  styles.audioButton,
+                  pressed && audioUri ? styles.audioButtonPressed : null,
+                ]}
+                onPress={() => playAudio(exerciseAudioPlayer)}
+              >
+                <Text style={styles.audioButtonText}>Ouvir audio</Text>
+              </Pressable>
+            ) : null}
+
+            {exerciseType === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO &&
+            getPromptText(selectedExercise) ? (
+              <Text style={styles.promptText}>
+                {getPromptText(selectedExercise)}
+              </Text>
+            ) : null}
+
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isSpendingPoint && !typedAnswerStatus}
+              onChangeText={setTypedAnswer}
+              onSubmitEditing={handleWrittenAnswerSubmit}
+              placeholder="Digite a resposta"
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="done"
+              style={[
+                styles.answerInput,
+                typedAnswerStatus === "wrong" ? styles.answerInputWrong : null,
+                typedAnswerStatus === "correct"
+                  ? styles.answerInputCorrect
+                  : null,
+              ]}
+              value={typedAnswer}
+            />
+
+            <Pressable
+              disabled={Boolean(
+                !typedAnswer.trim() || isSpendingPoint || typedAnswerStatus
+              )}
+              style={({ pressed }) => [
+                styles.nextButton,
+                typedAnswerStatus === "correct" ? styles.nextButtonCorrect : null,
+                typedAnswerStatus === "wrong" ? styles.nextButtonWrong : null,
+                pressed ? styles.nextButtonPressed : null,
+                !typedAnswer.trim() || (isSpendingPoint && !typedAnswerStatus)
+                  ? styles.disabledButton
+                  : null,
+              ]}
+              onPress={handleWrittenAnswerSubmit}
+            >
+              <Text style={styles.nextButtonText}>
+                {isSpendingPoint ? "Verificando..." : "Responder"}
+              </Text>
+            </Pressable>
+          </View>
+        ) : exerciseType === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ? (
+          <View style={styles.speechContent}>
+            <Text style={styles.promptText}>
+              {expectedTranscript || getPromptText(selectedExercise) || "Texto indisponivel"}
+            </Text>
+
+            {audioUri ? (
+              <Pressable
+                disabled={!audioUri}
+                style={({ pressed }) => [
+                  styles.audioButton,
+                  pressed && audioUri ? styles.audioButtonPressed : null,
+                ]}
+                onPress={() => playAudio(exerciseAudioPlayer)}
+              >
+                <Text style={styles.audioButtonText}>Ouvir modelo</Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              disabled={Boolean(isSpendingPoint || spokenAnswerStatus)}
+              style={({ pressed }) => [
+                styles.speechButton,
+                isListeningSpeech ? styles.speechButtonListening : null,
+                spokenAnswerStatus === "correct" ? styles.nextButtonCorrect : null,
+                spokenAnswerStatus === "wrong" ? styles.nextButtonWrong : null,
+                pressed ? styles.nextButtonPressed : null,
+                isSpendingPoint || spokenAnswerStatus ? styles.disabledButton : null,
+              ]}
+              onPress={handleSpeechStartPress}
+            >
+              <Text style={styles.nextButtonText}>
+                {isListeningSpeech ? "Parar" : "Falar"}
+              </Text>
+            </Pressable>
+
+            <Text
+              style={[
+                styles.transcriptText,
+                spokenAnswerStatus === "wrong" ? styles.transcriptTextWrong : null,
+                spokenAnswerStatus === "correct" ? styles.transcriptTextCorrect : null,
+              ]}
+            >
+              {spokenTranscript ||
+                (isListeningSpeech ? "Ouvindo..." : "Toque em Falar e repita o texto.")}
+            </Text>
+
+            {speechError ? (
+              <Text style={styles.errorText}>{speechError}</Text>
+            ) : null}
+
+            <Pressable
+              disabled={Boolean(
+                !spokenTranscript.trim() ||
+                  isListeningSpeech ||
+                  isSpendingPoint ||
+                  spokenAnswerStatus
+              )}
+              style={({ pressed }) => [
+                styles.nextButton,
+                spokenAnswerStatus === "correct" ? styles.nextButtonCorrect : null,
+                spokenAnswerStatus === "wrong" ? styles.nextButtonWrong : null,
+                pressed ? styles.nextButtonPressed : null,
+                !spokenTranscript.trim() ||
+                isListeningSpeech ||
+                (isSpendingPoint && !spokenAnswerStatus)
+                  ? styles.disabledButton
+                  : null,
+              ]}
+              onPress={handleSpeechAnswerSubmit}
+            >
+              <Text style={styles.nextButtonText}>
+                {isSpendingPoint ? "Verificando..." : "Responder"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              disabled={Boolean(
+                isListeningSpeech ||
+                  isSpendingPoint ||
+                  spokenAnswerStatus
+              )}
+              style={({ pressed }) => [
+                styles.skipSpeechButton,
+                pressed ? styles.audioButtonPressed : null,
+                isListeningSpeech ||
+                (isSpendingPoint && !spokenAnswerStatus) ||
+                spokenAnswerStatus
+                  ? styles.disabledButton
+                  : null,
+              ]}
+              onPress={handleSpeechSkipPress}
+            >
+              <Text style={styles.skipSpeechButtonText}>
+                {isSpendingPoint ? "Pulando..." : "Pular exercicio"}
+              </Text>
+            </Pressable>
+          </View>
         ) : optionCards.length ? (
           <View style={styles.optionsList}>
             {optionCards.map((card) => (
@@ -569,6 +1067,7 @@ export default function CategoryModuleScreen({
         ) : (
           <Text style={styles.helperText}>Nenhum exercicio encontrado.</Text>
         )}
+        </View>
 
         <Pressable
           style={styles.backButton}
@@ -589,7 +1088,7 @@ export default function CategoryModuleScreen({
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Sem pontos</Text>
             <Text style={styles.modalText}>
-              Voce nao tem mais pontos para continuar esta licao.
+              Você não tem mais pontos para continuar esta lição.
             </Text>
             <Pressable
               style={styles.modalButton}
@@ -647,8 +1146,18 @@ function playAudio(player) {
       .seekTo(0)
       .then(() => player.play())
       .catch(() => player.play());
-  } catch {
+  } catch (error) {
     // Audio feedback is optional; the exercise flow should continue if playback fails.
+    console.warn("[audio] Nao foi possivel tocar o audio:", error);
+  }
+}
+
+function getSpeechRecognitionModule() {
+  try {
+    return require("expo-speech-recognition").ExpoSpeechRecognitionModule;
+  } catch (error) {
+    console.warn("[speech] Modulo nativo indisponivel:", error);
+    return null;
   }
 }
 
@@ -657,7 +1166,9 @@ function isSupportedExercise(exercise) {
 
   return (
     type === EXERCISE_TYPES.JUST_AUDIO ||
-    type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION
+    type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
+    type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ||
+    isWrittenAnswerExerciseType(type)
   );
 }
 
@@ -677,7 +1188,41 @@ function getExerciseType(exercise) {
     return EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION;
   }
 
+  if (
+    type === "WRITE_TRANSLATION_FROM_AUDIO" ||
+    type === "WRITE-TRANSLATION-FROM-AUDIO"
+  ) {
+    return EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO;
+  }
+
+  if (
+    type === "WRITE_TRANSLATION_FROM_TEXT_AUDIO" ||
+    type === "WRITE-TRANSLATION-FROM-TEXT-AUDIO"
+  ) {
+    return EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO;
+  }
+
+  if (type === "SPEAK_WRITTEN_TEXT" || type === "SPEAK-WRITTEN-TEXT") {
+    return EXERCISE_TYPES.SPEAK_WRITTEN_TEXT;
+  }
+
   return exercise?.type || "";
+}
+
+function isAudioFirstExerciseType(type) {
+  return (
+    type === EXERCISE_TYPES.JUST_AUDIO ||
+    type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
+    type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO ||
+    type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO
+  );
+}
+
+function isWrittenAnswerExerciseType(type) {
+  return (
+    type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO ||
+    type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO
+  );
 }
 
 function getExerciseCard(exercise) {
@@ -694,9 +1239,18 @@ function getExerciseCard(exercise) {
 
 function getExerciseTitle(exercise) {
   const card = getExerciseCard(exercise);
+  const type = getExerciseType(exercise);
 
-  if (getExerciseType(exercise) === EXERCISE_TYPES.JUST_AUDIO) {
+  if (type === EXERCISE_TYPES.JUST_AUDIO) {
     return card?.english_name || getPromptText(exercise);
+  }
+
+  if (type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO) {
+    return "Ouvir e escrever";
+  }
+
+  if (type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT) {
+    return "Fale em voz alta";
   }
 
   return getPromptText(exercise) || card?.english_name || "";
@@ -731,12 +1285,61 @@ function getTranslationText(exercise) {
 function getAudioUri(exercise) {
   const card = getExerciseCard(exercise);
   const prompt = parseMaybeJson(exercise?.prompt);
+  const promptAudioUri =
+    prompt && typeof prompt === "object" ? prompt.audio_url : "";
+  const cardAudioUri = card?.audio_url || card?.audio || "";
 
-  if (prompt && typeof prompt === "object" && prompt.audio_url) {
-    return prompt.audio_url;
+  if (isLocalhostUri(promptAudioUri) && !isLocalhostUri(cardAudioUri)) {
+    return cardAudioUri || replaceLocalhostOrigin(promptAudioUri);
   }
 
-  return card?.audio_url || card?.audio || "";
+  return replaceLocalhostOrigin(promptAudioUri || cardAudioUri || "");
+}
+
+function getExpectedTranscript(exercise) {
+  const card = getExerciseCard(exercise);
+  const answerConfig = parseMaybeJson(exercise?.answer_config);
+
+  return (
+    answerConfig?.expected_transcript ||
+    answerConfig?.correct_text ||
+    getPromptText(exercise) ||
+    card?.english_name ||
+    ""
+  );
+}
+
+function isLocalhostUri(value) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(
+    String(value || "")
+  );
+}
+
+function replaceLocalhostOrigin(value) {
+  if (!isLocalhostUri(value)) {
+    return value;
+  }
+
+  const apiOrigin = getUrlOrigin(API_BASE_URL);
+
+  if (!apiOrigin) {
+    return value;
+  }
+
+  return String(value).replace(
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i,
+    apiOrigin
+  );
+}
+
+function getUrlOrigin(value) {
+  try {
+    const parsedUrl = new URL(value);
+
+    return parsedUrl.origin;
+  } catch {
+    return "";
+  }
 }
 
 function getExerciseOptions(exercise) {
@@ -777,6 +1380,107 @@ function isCorrectOption(option, exercise) {
     card?.international_name;
 
   return option.id === correctId || option.text === correctText;
+}
+
+function isCorrectWrittenAnswer(answer, exercise) {
+  const answerConfig = parseMaybeJson(exercise?.answer_config);
+  const acceptedAnswers = getAcceptedWrittenAnswers(exercise);
+
+  return acceptedAnswers.some(
+    (acceptedAnswer) =>
+      normalizeWrittenAnswer(answer, answerConfig) ===
+      normalizeWrittenAnswer(acceptedAnswer, answerConfig)
+  );
+}
+
+function isCorrectSpokenAnswer(answer, exercise) {
+  const acceptedAnswers = getAcceptedSpokenAnswers(exercise);
+
+  return acceptedAnswers.some(
+    (acceptedAnswer) =>
+      normalizeSpokenAnswer(answer) === normalizeSpokenAnswer(acceptedAnswer)
+  );
+}
+
+function getAcceptedSpokenAnswers(exercise) {
+  const answerConfig = parseMaybeJson(exercise?.answer_config);
+  const acceptedAnswers = [];
+
+  if (Array.isArray(answerConfig?.accept)) {
+    acceptedAnswers.push(...answerConfig.accept);
+  }
+
+  if (answerConfig?.expected_transcript) {
+    acceptedAnswers.push(answerConfig.expected_transcript);
+  }
+
+  if (answerConfig?.correct_text) {
+    acceptedAnswers.push(answerConfig.correct_text);
+  }
+
+  const promptText = getPromptText(exercise);
+
+  if (promptText) {
+    acceptedAnswers.push(promptText);
+  }
+
+  const card = getExerciseCard(exercise);
+
+  if (card?.english_name) {
+    acceptedAnswers.push(card.english_name);
+  }
+
+  return [...new Set(acceptedAnswers.filter(Boolean).map(String))];
+}
+
+function getSpeechRecognitionLanguage(exercise) {
+  const answerConfig = parseMaybeJson(exercise?.answer_config);
+
+  return answerConfig?.language || "en-US";
+}
+
+function normalizeSpokenAnswer(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9\s']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getAcceptedWrittenAnswers(exercise) {
+  const card = getExerciseCard(exercise);
+  const answerConfig = parseMaybeJson(exercise?.answer_config);
+  const acceptedAnswers = [];
+
+  if (Array.isArray(answerConfig?.accept)) {
+    acceptedAnswers.push(...answerConfig.accept);
+  }
+
+  if (answerConfig?.correct_text) {
+    acceptedAnswers.push(answerConfig.correct_text);
+  }
+
+  if (answerConfig?.translation) {
+    acceptedAnswers.push(answerConfig.translation);
+  }
+
+  if (card?.international_name) {
+    acceptedAnswers.push(card.international_name);
+  }
+
+  return [...new Set(acceptedAnswers.filter(Boolean).map(String))];
+}
+
+function normalizeWrittenAnswer(value, answerConfig) {
+  const shouldTrim = answerConfig?.trim !== false && answerConfig?.trim !== "false";
+  const isCaseSensitive =
+    answerConfig?.case_sensitive === true ||
+    answerConfig?.case_sensitive === "true";
+  const nextValue = shouldTrim ? String(value || "").trim() : String(value || "");
+
+  return isCaseSensitive ? nextValue : nextValue.toLocaleLowerCase();
 }
 
 function parseMaybeJson(value) {
@@ -835,7 +1539,12 @@ function createStyles(colors, shadows) {
       backgroundColor: colors.surfaceMuted,
       borderWidth: 1,
       borderColor: colors.border,
+      justifyContent: "flex-start",
       ...shadows.soft,
+    },
+    exerciseCard: {
+      flex: 1,
+      minHeight: 560,
     },
     moduleName: {
       color: colors.textPrimary,
@@ -847,8 +1556,19 @@ function createStyles(colors, shadows) {
       paddingVertical: 24,
       marginBottom: 20,
     },
+    exerciseBody: {
+      flex: 1,
+    },
     justAudioContent: {
       gap: 16,
+      marginBottom: 18,
+    },
+    writtenAnswerContent: {
+      gap: 14,
+      marginBottom: 18,
+    },
+    speechContent: {
+      gap: 14,
       marginBottom: 18,
     },
     audioButton: {
@@ -875,6 +1595,31 @@ function createStyles(colors, shadows) {
       lineHeight: 28,
       textAlign: "center",
     },
+    promptText: {
+      color: colors.textPrimary,
+      fontSize: 22,
+      fontWeight: "800",
+      lineHeight: 30,
+      textAlign: "center",
+    },
+    answerInput: {
+      height: 54,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: "700",
+      paddingHorizontal: 16,
+      textAlign: "center",
+    },
+    answerInputWrong: {
+      borderColor: colors.error,
+    },
+    answerInputCorrect: {
+      borderColor: colors.success,
+    },
     nextButton: {
       height: 52,
       borderRadius: 16,
@@ -889,10 +1634,52 @@ function createStyles(colors, shadows) {
     nextButtonCorrect: {
       backgroundColor: colors.success,
     },
+    nextButtonWrong: {
+      backgroundColor: colors.error,
+    },
     nextButtonText: {
       color: colors.surfaceMuted,
       fontSize: 15,
       fontWeight: "800",
+    },
+    speechButton: {
+      height: 56,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.textPrimary,
+      ...shadows.soft,
+    },
+    speechButtonListening: {
+      backgroundColor: colors.link,
+    },
+    skipSpeechButton: {
+      height: 46,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    skipSpeechButtonText: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "800",
+    },
+    transcriptText: {
+      minHeight: 48,
+      color: colors.textSecondary,
+      fontSize: 15,
+      fontWeight: "700",
+      lineHeight: 22,
+      textAlign: "center",
+    },
+    transcriptTextWrong: {
+      color: colors.error,
+    },
+    transcriptTextCorrect: {
+      color: colors.success,
     },
     disabledButton: {
       opacity: 0.56,
@@ -951,6 +1738,7 @@ function createStyles(colors, shadows) {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: colors.textPrimary,
+      marginTop: "auto",
       ...shadows.soft,
     },
     backButtonText: {

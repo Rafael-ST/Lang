@@ -22,7 +22,15 @@
     "plugins": [
       "expo-web-browser",
       "expo-asset",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permita que o Lang use o microfone para exercicios de fala.",
+          "speechRecognitionPermission": "Permita que o Lang reconheca sua fala nos exercicios.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ]
     ],
     "extra": {
       "googleAuth": {
