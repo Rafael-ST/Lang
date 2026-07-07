@@ -199,7 +199,7 @@ export default function CategoryModuleScreen({
           console.info("[exercises] Retorno de /exercises/:", data);
           console.info("[exercises] Exercicios normalizados:", nextExercises);
 
-          setExercises(shuffleItems(nextExercises));
+          setExercises(sortExercisesByOrder(nextExercises));
           setSelectedExerciseIndex(0);
           setCompletedExerciseIds([]);
           setPostponedExerciseIds([]);
@@ -829,6 +829,9 @@ export default function CategoryModuleScreen({
       ) : (
       <View style={[styles.card, styles.exerciseCard]}>
         <Text style={styles.moduleName}>{moduleName}</Text>
+        {translationText ? (
+          <Text style={styles.titleTranslationText}>{translationText}</Text>
+        ) : null}
 
         <View style={styles.exerciseBody}>
         {isLoadingExercises || isLoadingProfile ? (
@@ -858,10 +861,6 @@ export default function CategoryModuleScreen({
                 {audioUri ? "Ouvir audio" : "Audio indisponivel"}
               </Text>
             </Pressable>
-
-            <Text style={styles.translationText}>
-              {translationText || "Traducao indisponivel"}
-            </Text>
 
             <Pressable
               disabled={isSpendingPoint}
@@ -1246,7 +1245,7 @@ function getExerciseTitle(exercise) {
   }
 
   if (type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO) {
-    return "Ouvir e escrever";
+    return "Escreva o que ouvir";
   }
 
   if (type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT) {
@@ -1268,10 +1267,15 @@ function getPromptText(exercise) {
 
 function getTranslationText(exercise) {
   const card = getExerciseCard(exercise);
+  const type = getExerciseType(exercise);
   const answerConfig = parseMaybeJson(exercise?.answer_config);
 
   if (typeof answerConfig === "string") {
     return answerConfig;
+  }
+
+  if (type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO) {
+    return answerConfig?.translation || card?.international_name || "";
   }
 
   return (
@@ -1522,6 +1526,19 @@ function shuffleItems(items) {
   return [...items].sort(() => Math.random() - 0.5);
 }
 
+function sortExercisesByOrder(items) {
+  return [...items].sort((firstExercise, secondExercise) => {
+    const firstOrder = Number(firstExercise?.order ?? 0);
+    const secondOrder = Number(secondExercise?.order ?? 0);
+
+    if (firstOrder !== secondOrder) {
+      return firstOrder - secondOrder;
+    }
+
+    return Number(firstExercise?.id ?? 0) - Number(secondExercise?.id ?? 0);
+  });
+}
+
 function createStyles(colors, shadows) {
   return StyleSheet.create({
     container: {
@@ -1554,6 +1571,14 @@ function createStyles(colors, shadows) {
       minHeight: 96,
       textAlignVertical: "center",
       paddingVertical: 24,
+      marginBottom: 6,
+    },
+    titleTranslationText: {
+      color: colors.textSecondary,
+      fontSize: 20,
+      fontWeight: "800",
+      lineHeight: 28,
+      textAlign: "center",
       marginBottom: 20,
     },
     exerciseBody: {
