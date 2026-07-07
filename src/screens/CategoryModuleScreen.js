@@ -7,6 +7,7 @@ import {
   Vibration,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAudioPlayer } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -104,6 +105,8 @@ export default function CategoryModuleScreen({
   const expectedTranscript = getExpectedTranscript(selectedExercise);
   const audioUri = getAudioUri(selectedExercise);
   const username = user?.username || user?.email;
+  const isProfilePending = Boolean(username && !profile && !pointsError);
+  const hasNoPoints = Boolean(profile && profile.pontos <= 0);
   const exerciseAudioPlayer = useAudioPlayer(
     null,
     { keepAudioSessionActive: true }
@@ -247,13 +250,22 @@ export default function CategoryModuleScreen({
     if (
       !isAudioFirstExerciseType(exerciseType) ||
       !soundEnabled ||
-      !audioUri
+      !audioUri ||
+      isProfilePending ||
+      hasNoPoints
     ) {
       return;
     }
 
     playAudio(exerciseAudioPlayer);
-  }, [audioUri, exerciseAudioPlayer, exerciseType, soundEnabled]);
+  }, [
+    audioUri,
+    exerciseAudioPlayer,
+    exerciseType,
+    hasNoPoints,
+    isProfilePending,
+    soundEnabled,
+  ]);
 
   useEffect(() => {
     setTypedAnswer("");
@@ -814,6 +826,10 @@ export default function CategoryModuleScreen({
     onBack?.();
   }
 
+  const shouldShowOnlyNoPointsModal = Boolean(
+    isNoPointsModalVisible && hasNoPoints
+  );
+
   return (
     <ScreenContainer contentStyle={styles.container}>
       {isSetCompleted ? (
@@ -826,7 +842,11 @@ export default function CategoryModuleScreen({
             <Text style={styles.nextButtonText}>Voltar</Text>
           </Pressable>
         </View>
-      ) : (
+      ) : isProfilePending ? (
+        <View style={styles.card}>
+          <Text style={styles.helperText}>Carregando seus pontos...</Text>
+        </View>
+      ) : shouldShowOnlyNoPointsModal ? null : (
       <View style={[styles.card, styles.exerciseCard]}>
         <Text style={styles.moduleName}>{moduleName}</Text>
         {translationText ? (
@@ -849,6 +869,9 @@ export default function CategoryModuleScreen({
         ) : exerciseType === EXERCISE_TYPES.JUST_AUDIO ? (
           <View style={styles.justAudioContent}>
             <Pressable
+              accessibilityLabel={
+                audioUri ? "Ouvir audio" : "Audio indisponivel"
+              }
               disabled={!audioUri}
               style={({ pressed }) => [
                 styles.audioButton,
@@ -857,9 +880,11 @@ export default function CategoryModuleScreen({
               ]}
               onPress={() => playAudio(exerciseAudioPlayer)}
             >
-              <Text style={styles.audioButtonText}>
-                {audioUri ? "Ouvir audio" : "Audio indisponivel"}
-              </Text>
+              <Ionicons
+                name="volume-high"
+                size={26}
+                color={colors.textPrimary}
+              />
             </Pressable>
 
             <Pressable
@@ -875,7 +900,7 @@ export default function CategoryModuleScreen({
               onPress={handleJustAudioNextPress}
             >
               <Text style={styles.nextButtonText}>
-                {isSpendingPoint ? "Avancando..." : "Proximo"}
+                {isSpendingPoint ? "Avancando..." : "Próximo"}
               </Text>
             </Pressable>
           </View>
@@ -883,6 +908,7 @@ export default function CategoryModuleScreen({
           <View style={styles.writtenAnswerContent}>
             {audioUri ? (
               <Pressable
+                accessibilityLabel="Ouvir audio"
                 disabled={!audioUri}
                 style={({ pressed }) => [
                   styles.audioButton,
@@ -890,7 +916,11 @@ export default function CategoryModuleScreen({
                 ]}
                 onPress={() => playAudio(exerciseAudioPlayer)}
               >
-                <Text style={styles.audioButtonText}>Ouvir audio</Text>
+                <Ionicons
+                  name="volume-high"
+                  size={26}
+                  color={colors.textPrimary}
+                />
               </Pressable>
             ) : null}
 
@@ -948,6 +978,7 @@ export default function CategoryModuleScreen({
 
             {audioUri ? (
               <Pressable
+                accessibilityLabel="Ouvir modelo"
                 disabled={!audioUri}
                 style={({ pressed }) => [
                   styles.audioButton,
@@ -955,7 +986,11 @@ export default function CategoryModuleScreen({
                 ]}
                 onPress={() => playAudio(exerciseAudioPlayer)}
               >
-                <Text style={styles.audioButtonText}>Ouvir modelo</Text>
+                <Ionicons
+                  name="volume-high"
+                  size={26}
+                  color={colors.textPrimary}
+                />
               </Pressable>
             ) : null}
 
@@ -1455,6 +1490,7 @@ function normalizeSpokenAnswer(value) {
 
 function getAcceptedWrittenAnswers(exercise) {
   const card = getExerciseCard(exercise);
+  const type = getExerciseType(exercise);
   const answerConfig = parseMaybeJson(exercise?.answer_config);
   const acceptedAnswers = [];
 
@@ -1464,6 +1500,14 @@ function getAcceptedWrittenAnswers(exercise) {
 
   if (answerConfig?.correct_text) {
     acceptedAnswers.push(answerConfig.correct_text);
+  }
+
+  if (type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO) {
+    if (card?.english_name) {
+      acceptedAnswers.push(card.english_name);
+    }
+
+    return [...new Set(acceptedAnswers.filter(Boolean).map(String))];
   }
 
   if (answerConfig?.translation) {
@@ -1607,11 +1651,6 @@ function createStyles(colors, shadows) {
     },
     audioButtonPressed: {
       backgroundColor: colors.surfaceMuted,
-    },
-    audioButtonText: {
-      color: colors.textPrimary,
-      fontSize: 15,
-      fontWeight: "800",
     },
     translationText: {
       color: colors.textSecondary,

@@ -32,7 +32,7 @@ export default function ExerciseSetsScreen({
         const data = await fetchExerciseSetsBySublevel(sublevel?.id);
 
         if (isMounted) {
-          setExerciseSets(normalizeList(data));
+          setExerciseSets(sortExerciseSetsByOrder(normalizeList(data)));
         }
       } catch {
         if (isMounted) {
@@ -80,28 +80,37 @@ export default function ExerciseSetsScreen({
             <Text style={styles.errorText}>{exerciseSetsError}</Text>
           ) : exerciseSets.length ? (
             <View style={styles.exerciseSetsList}>
-              {exerciseSets.map((exerciseSet) => {
+              {exerciseSets.map((exerciseSet, index) => {
                 const isActive = exerciseSet.is_active !== false;
                 const isCompleted = isExerciseSetCompleted(exerciseSet);
+                const previousExerciseSet = exerciseSets[index - 1];
+                const isLocked = Boolean(
+                  index > 0 && !isExerciseSetCompleted(previousExerciseSet)
+                );
+                const canPress = isActive && !isLocked;
 
                 return (
                   <Pressable
                     key={exerciseSet.id}
-                    disabled={!isActive}
+                    disabled={!canPress}
                     style={({ pressed }) => [
                       styles.exerciseSetItem,
-                      pressed && isActive
+                      pressed && canPress
                         ? styles.exerciseSetItemPressed
                         : null,
                       isCompleted ? styles.exerciseSetItemCompleted : null,
-                      !isActive ? styles.exerciseSetItemDisabled : null,
+                      !canPress ? styles.exerciseSetItemDisabled : null,
                     ]}
-                    onPress={() => onExerciseSetPress?.(exerciseSet)}
+                    onPress={() => {
+                      if (canPress) {
+                        onExerciseSetPress?.(exerciseSet);
+                      }
+                    }}
                   >
                     <Text
                       style={[
                         styles.exerciseSetTitle,
-                        !isActive ? styles.exerciseSetTitleDisabled : null,
+                        !canPress ? styles.exerciseSetTitleDisabled : null,
                       ]}
                     >
                       {exerciseSet.title || "Conjunto sem titulo"}
@@ -113,9 +122,13 @@ export default function ExerciseSetsScreen({
                     ) : null}
                     {!isActive ? (
                       <Text style={styles.exerciseSetStatus}>Inativo</Text>
+                    ) : isLocked ? (
+                      <Text style={styles.exerciseSetStatus}>
+                        Complete o anterior
+                      </Text>
                     ) : isCompleted ? (
                       <Text style={styles.exerciseSetCompleted}>
-                        Concluido
+                        Concluído
                       </Text>
                     ) : null}
                   </Pressable>
@@ -154,6 +167,19 @@ function isExerciseSetCompleted(exerciseSet) {
     exerciseSet?.is_completed ||
     exerciseSet?.progress?.status === "completed"
   );
+}
+
+function sortExerciseSetsByOrder(items) {
+  return [...items].sort((firstSet, secondSet) => {
+    const firstOrder = Number(firstSet?.order ?? 0);
+    const secondOrder = Number(secondSet?.order ?? 0);
+
+    if (firstOrder !== secondOrder) {
+      return firstOrder - secondOrder;
+    }
+
+    return Number(firstSet?.id ?? 0) - Number(secondSet?.id ?? 0);
+  });
 }
 
 function createStyles(colors, shadows) {
