@@ -1142,9 +1142,9 @@ export default function CategoryModuleScreen({
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Sair da licao?</Text>
+            <Text style={styles.modalTitle}>Sair da lição?</Text>
             <Text style={styles.modalText}>
-              Caso saia voce perdera o progresso dessa licao.
+              Caso saia você perderá o progresso dessa lição.
             </Text>
             <View style={styles.modalActions}>
               <Pressable

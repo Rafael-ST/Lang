@@ -22,6 +22,7 @@ import LearningLevelsScreen from "../screens/LearningLevelsScreen";
 import SublevelsScreen from "../screens/SublevelsScreen";
 import ExerciseSetsScreen from "../screens/ExerciseSetsScreen";
 import CategoryModuleScreen from "../screens/CategoryModuleScreen";
+import ProfileScreen from "../screens/ProfileScreen";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
 import { useTheme } from "../theme";
 
@@ -29,7 +30,7 @@ const VIBRATION_STORAGE_KEY = "@lang/vibration-enabled";
 const SOUND_STORAGE_KEY = "@lang/sound-enabled";
 
 export default function AppNavigator() {
-  const { isLoading, signOut, user } = useAuth();
+  const { isLoading, signOut, updateAuthenticatedUser, user } = useAuth();
   const { colors, isDarkMode, setDarkMode, shadows } = useTheme();
   const [screen, setScreen] = useState("login");
   const [selectedLevel, setSelectedLevel] = useState(null);
@@ -201,7 +202,9 @@ export default function AppNavigator() {
       <StatusBar style={isDarkMode ? "light" : "dark"} />
       {isLoggedIn ? (
         <>
-          {screen === "category-module" ? (
+          {screen === "profile" ? (
+            <ProfileScreen onUserChange={updateAuthenticatedUser} />
+          ) : screen === "category-module" ? (
             <CategoryModuleScreen
               category={selectedCategory}
               exerciseSet={selectedExerciseSet}
@@ -343,6 +346,33 @@ export default function AppNavigator() {
               </View>
             ) : null}
           </View>
+
+          <View style={styles.bottomNavigator}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Abrir perfil"
+              style={styles.bottomTab}
+              onPress={() => {
+                setSettingsOpen(false);
+                setScreen("profile");
+              }}
+            >
+              <Ionicons name={screen === "profile" ? "person" : "person-outline"} size={24} color={screen === "profile" ? colors.link : colors.textMuted} />
+              <Text style={[styles.bottomTabText, screen === "profile" && styles.bottomTabTextActive]}>Perfil</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Abrir aprendizado"
+              style={styles.bottomTab}
+              onPress={() => {
+                setSettingsOpen(false);
+                setScreen("levels");
+              }}
+            >
+              <Ionicons name={screen !== "profile" ? "school" : "school-outline"} size={24} color={screen !== "profile" ? colors.link : colors.textMuted} />
+              <Text style={[styles.bottomTabText, screen !== "profile" && styles.bottomTabTextActive]}>Aprender</Text>
+            </Pressable>
+          </View>
         </>
       ) : screen === "forgot-password" ? (
         <ForgotPasswordScreen onBack={() => setScreen("login")} />
@@ -363,6 +393,36 @@ export default function AppNavigator() {
 
 function createStyles(colors, shadows) {
   return StyleSheet.create({
+    bottomNavigator: {
+      position: "absolute",
+      right: 18,
+      bottom: 16,
+      left: 18,
+      height: 72,
+      zIndex: 80,
+      elevation: 80,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-around",
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceMuted,
+      ...shadows.soft,
+    },
+    bottomTab: {
+      flex: 1,
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 3,
+    },
+    bottomTabText: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    bottomTabTextActive: { color: colors.link },
     settingsWrap: {
       position: "absolute",
       top: 18,

@@ -8,6 +8,10 @@ Aplicativo React Native com Expo para aprendizagem de idiomas por niveis, subniv
 2. Configure `EXPO_PUBLIC_API_BASE_URL` no `.env`
 3. Rode o projeto com `npx expo start`
 
+
+npm install
+npm run android
+
 ## Fluxo de conteudo
 
 ```txt

@@ -186,6 +186,12 @@ export function AuthProvider({ children }) {
     await clearStoredUser();
   }
 
+  async function updateAuthenticatedUser(changes) {
+    const nextUser = { ...user, ...changes };
+    setUser(nextUser);
+    await storeUser(nextUser);
+  }
+
   const value = {
     authError,
     isConfigured,
@@ -194,6 +200,7 @@ export function AuthProvider({ children }) {
     signInWithCredentials,
     signInWithGoogle,
     signOut,
+    updateAuthenticatedUser,
     user,
   };
 
