@@ -1,4 +1,5 @@
 import {
+  Animated,
   Modal,
   Pressable,
   StyleSheet,
@@ -31,6 +32,7 @@ const EXERCISE_TYPES = {
   WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
   WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
 };
+const PROGRESS_ADVANCE_DELAY_MS = 650;
 
 export default function CategoryModuleScreen({
   category,
@@ -49,6 +51,8 @@ export default function CategoryModuleScreen({
   const [wrongOptionId, setWrongOptionId] = useState(null);
   const [correctOptionId, setCorrectOptionId] = useState(null);
   const [completedExerciseIds, setCompletedExerciseIds] = useState([]);
+  const [progressCompletedExerciseIds, setProgressCompletedExerciseIds] =
+    useState([]);
   const [postponedExerciseIds, setPostponedExerciseIds] = useState([]);
   const [isSetCompleted, setIsSetCompleted] = useState(false);
   const [isJustAudioCorrect, setIsJustAudioCorrect] = useState(false);
@@ -70,6 +74,7 @@ export default function CategoryModuleScreen({
   const [completionStats, setCompletionStats] = useState(null);
   const nextExerciseTimeout = useRef(null);
   const exerciseSetStartedAt = useRef(null);
+  const progressAnimation = useRef(new Animated.Value(0)).current;
   const correctSoundPlayer = useAudioPlayer(
     require("../../assets/correct-answer.ogg"),
     { keepAudioSessionActive: true }
@@ -211,6 +216,7 @@ export default function CategoryModuleScreen({
           setExercises(sortExercisesByOrder(nextExercises));
           setSelectedExerciseIndex(0);
           setCompletedExerciseIds([]);
+          setProgressCompletedExerciseIds([]);
           setPostponedExerciseIds([]);
           setAnswerStats({ correct: 0, wrong: 0 });
           setCompletionStats(null);
@@ -803,31 +809,39 @@ export default function CategoryModuleScreen({
       return;
     }
 
+    setProgressCompletedExerciseIds((currentIds) => [
+      ...new Set([...currentIds, selectedExercise.id]),
+    ]);
+
     if (completeResult?.set_completed || pendingExercises.length <= 1) {
+      nextExerciseTimeout.current = setTimeout(() => {
+        setCompletedExerciseIds((currentIds) => [
+          ...new Set([...currentIds, selectedExercise.id]),
+        ]);
+        setPostponedExerciseIds((currentIds) =>
+          currentIds.filter((id) => id !== selectedExercise.id)
+        );
+        setCompletionStats({
+          correct: nextStats.correct,
+          durationMs: Date.now() - (exerciseSetStartedAt.current || Date.now()),
+          total: playableExercises.length,
+          wrong: nextStats.wrong,
+        });
+        setIsSetCompleted(true);
+        setSelectedExerciseIndex(0);
+      }, PROGRESS_ADVANCE_DELAY_MS);
+      return;
+    }
+
+    nextExerciseTimeout.current = setTimeout(() => {
       setCompletedExerciseIds((currentIds) => [
         ...new Set([...currentIds, selectedExercise.id]),
       ]);
       setPostponedExerciseIds((currentIds) =>
         currentIds.filter((id) => id !== selectedExercise.id)
       );
-      setCompletionStats({
-        correct: nextStats.correct,
-        durationMs: Date.now() - (exerciseSetStartedAt.current || Date.now()),
-        total: playableExercises.length,
-        wrong: nextStats.wrong,
-      });
-      setIsSetCompleted(true);
       setSelectedExerciseIndex(0);
-      return;
-    }
-
-    setCompletedExerciseIds((currentIds) => [
-      ...new Set([...currentIds, selectedExercise.id]),
-    ]);
-    setPostponedExerciseIds((currentIds) =>
-      currentIds.filter((id) => id !== selectedExercise.id)
-    );
-    setSelectedExerciseIndex(0);
+    }, PROGRESS_ADVANCE_DELAY_MS);
   }
 
   async function resetCurrentExerciseSetIfNeeded() {
@@ -861,6 +875,26 @@ export default function CategoryModuleScreen({
   const shouldShowOnlyNoPointsModal = Boolean(
     isNoPointsModalVisible && hasNoPoints
   );
+  const totalProgressExercises = playableExercises.length;
+  const completedProgressExercises = isSetCompleted
+    ? totalProgressExercises
+    : Math.min(progressCompletedExerciseIds.length, totalProgressExercises);
+  const progressPercent = totalProgressExercises
+    ? (completedProgressExercises / totalProgressExercises) * 100
+    : 0;
+  const animatedProgressWidth = progressAnimation.interpolate({
+    inputRange: [0, 100],
+    outputRange: ["0%", "100%"],
+  });
+
+  useEffect(() => {
+    Animated.spring(progressAnimation, {
+      toValue: progressPercent,
+      friction: 9,
+      tension: 70,
+      useNativeDriver: false,
+    }).start();
+  }, [progressAnimation, progressPercent]);
 
   return (
     <ScreenContainer contentStyle={styles.container}>
@@ -906,6 +940,26 @@ export default function CategoryModuleScreen({
         </View>
       ) : shouldShowOnlyNoPointsModal ? null : (
       <View style={[styles.card, styles.exerciseCard]}>
+        <View
+          accessibilityRole="progressbar"
+          accessibilityValue={{
+            min: 0,
+            max: totalProgressExercises,
+            now: completedProgressExercises,
+          }}
+          style={styles.progressContainer}
+        >
+          <View style={styles.progressTrack}>
+            <Animated.View
+              style={[
+                styles.progressFill,
+                { width: animatedProgressWidth },
+              ]}
+            >
+              <View style={styles.progressGlow} />
+            </Animated.View>
+          </View>
+        </View>
         <Text style={styles.moduleName}>{moduleName}</Text>
         {translationText ? (
           <Text style={styles.titleTranslationText}>{translationText}</Text>
@@ -1676,6 +1730,55 @@ function createStyles(colors, shadows) {
     exerciseCard: {
       flex: 1,
       minHeight: 560,
+    },
+    progressContainer: {
+      width: "100%",
+      marginBottom: 14,
+    },
+    progressHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    progressLabel: {
+      color: colors.textMutedDark,
+      fontSize: 12,
+      fontWeight: "800",
+      textTransform: "uppercase",
+    },
+    progressValue: {
+      color: colors.textPrimary,
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    progressTrack: {
+      height: 18,
+      overflow: "hidden",
+      borderRadius: 999,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    progressFill: {
+      height: "100%",
+      borderRadius: 999,
+      backgroundColor: colors.success,
+      overflow: "hidden",
+      shadowColor: colors.success,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    progressGlow: {
+      position: "absolute",
+      top: 1,
+      right: 2,
+      bottom: 1,
+      width: 12,
+      borderRadius: 999,
+      backgroundColor: "rgba(255, 255, 255, 0.32)",
     },
     moduleName: {
       color: colors.textPrimary,
