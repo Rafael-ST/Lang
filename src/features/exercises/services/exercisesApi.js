@@ -8,12 +8,17 @@ export function fetchExercisesByCategory(categoryId) {
   return apiRequest(`/exercises/?categoria_id=${encodeURIComponent(categoryId)}`);
 }
 
-export function fetchExercisesBySet(exerciseSetId) {
+export function fetchExercisesBySet(exerciseSetId, options = {}) {
   if (!exerciseSetId) {
     return fetchExercises();
   }
 
-  return apiRequest(`/exercises/?exercise_set=${encodeURIComponent(exerciseSetId)}`);
+  const exerciseSetParam = `exercise_set=${encodeURIComponent(exerciseSetId)}`;
+  const includeCompletedParam = options.includeCompleted
+    ? "&include_completed=true"
+    : "";
+
+  return apiRequest(`/exercises/?${exerciseSetParam}${includeCompletedParam}`);
 }
 
 export function fetchExercises() {

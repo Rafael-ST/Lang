@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
@@ -15,6 +15,7 @@ export default function ExerciseSetsScreen({
   const [exerciseSets, setExerciseSets] = useState([]);
   const [isLoadingExerciseSets, setIsLoadingExerciseSets] = useState(false);
   const [exerciseSetsError, setExerciseSetsError] = useState("");
+  const [reviewExerciseSet, setReviewExerciseSet] = useState(null);
   const styles = createStyles(colors, shadows);
 
   useEffect(() => {
@@ -102,9 +103,16 @@ export default function ExerciseSetsScreen({
                       !canPress ? styles.exerciseSetItemDisabled : null,
                     ]}
                     onPress={() => {
-                      if (canPress) {
-                        onExerciseSetPress?.(exerciseSet);
+                      if (!canPress) {
+                        return;
                       }
+
+                      if (isCompleted) {
+                        setReviewExerciseSet(exerciseSet);
+                        return;
+                      }
+
+                      onExerciseSetPress?.(exerciseSet);
                     }}
                   >
                     <Text
@@ -142,6 +150,40 @@ export default function ExerciseSetsScreen({
           )}
         </View>
       )}
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={Boolean(reviewExerciseSet)}
+        onRequestClose={() => setReviewExerciseSet(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Conjunto já completo</Text>
+            <Text style={styles.modalText}>
+              Você já completou este conjunto. Quer fazer uma revisão?
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalButton, styles.modalSecondaryButton]}
+                onPress={() => setReviewExerciseSet(null)}
+              >
+                <Text style={styles.modalSecondaryButtonText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalButton}
+                onPress={() => {
+                  const selectedSet = reviewExerciseSet;
+                  setReviewExerciseSet(null);
+                  onExerciseSetPress?.(selectedSet, { isReview: true });
+                }}
+              >
+                <Text style={styles.modalButtonText}>Revisar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -285,6 +327,64 @@ function createStyles(colors, shadows) {
       color: colors.error,
       fontSize: 14,
       lineHeight: 20,
+    },
+    modalBackdrop: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+      backgroundColor: "rgba(0, 0, 0, 0.42)",
+    },
+    modalCard: {
+      width: "100%",
+      maxWidth: 340,
+      padding: 22,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceMuted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.soft,
+    },
+    modalTitle: {
+      color: colors.textPrimary,
+      fontSize: 18,
+      fontWeight: "800",
+      marginBottom: 8,
+    },
+    modalText: {
+      color: colors.textMutedDark,
+      fontSize: 14,
+      fontWeight: "600",
+      lineHeight: 20,
+      marginBottom: 18,
+    },
+    modalActions: {
+      flexDirection: "row",
+      gap: 10,
+      justifyContent: "flex-end",
+    },
+    modalButton: {
+      minHeight: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 16,
+      borderRadius: 14,
+      backgroundColor: colors.textPrimary,
+    },
+    modalSecondaryButton: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalButtonText: {
+      color: colors.surface,
+      fontSize: 14,
+      fontWeight: "800",
+    },
+    modalSecondaryButtonText: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: "800",
     },
   });
 }

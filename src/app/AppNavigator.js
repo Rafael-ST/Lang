@@ -12,6 +12,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAudioPlayer } from "expo-audio";
 import { useEffect, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "../features/auth/context/AuthContext";
 import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
@@ -30,6 +31,7 @@ const VIBRATION_STORAGE_KEY = "@lang/vibration-enabled";
 const SOUND_STORAGE_KEY = "@lang/sound-enabled";
 
 export default function AppNavigator() {
+  const insets = useSafeAreaInsets();
   const { isLoading, signOut, updateAuthenticatedUser, user } = useAuth();
   const { colors, isDarkMode, setDarkMode, shadows } = useTheme();
   const [screen, setScreen] = useState("login");
@@ -37,6 +39,7 @@ export default function AppNavigator() {
   const [selectedSublevel, setSelectedSublevel] = useState(null);
   const [selectedExerciseSet, setSelectedExerciseSet] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [isReviewMode, setIsReviewMode] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVibrationEnabled, setIsVibrationEnabled] = useState(true);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
@@ -208,23 +211,29 @@ export default function AppNavigator() {
             <CategoryModuleScreen
               category={selectedCategory}
               exerciseSet={selectedExerciseSet}
+              isReviewMode={isReviewMode}
               onProfileChange={setProfile}
               soundEnabled={isSoundEnabled}
               sublevel={selectedSublevel}
               user={user}
               vibrationEnabled={isVibrationEnabled}
-              onBack={() => setScreen("exercise-sets")}
+              onBack={() => {
+                setIsReviewMode(false);
+                setScreen("exercise-sets");
+              }}
             />
           ) : screen === "exercise-sets" ? (
             <ExerciseSetsScreen
               sublevel={selectedSublevel}
               onBack={() => {
                 setSelectedExerciseSet(null);
+                setIsReviewMode(false);
                 setScreen("sublevels");
               }}
-              onExerciseSetPress={(exerciseSet) => {
+              onExerciseSetPress={(exerciseSet, options = {}) => {
                 setSelectedExerciseSet(exerciseSet);
                 setSelectedCategory(null);
+                setIsReviewMode(Boolean(options.isReview));
                 setScreen("category-module");
               }}
             />
@@ -243,6 +252,7 @@ export default function AppNavigator() {
               onBack={() => {
                 setSelectedSublevel(null);
                 setSelectedExerciseSet(null);
+                setIsReviewMode(false);
                 setScreen("levels");
               }}
               onSublevelPress={(sublevel) => {
@@ -347,32 +357,39 @@ export default function AppNavigator() {
             ) : null}
           </View>
 
-          <View style={styles.bottomNavigator}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Abrir perfil"
-              style={styles.bottomTab}
-              onPress={() => {
-                setSettingsOpen(false);
-                setScreen("profile");
-              }}
+          {screen !== "category-module" ? (
+            <View
+              style={[
+                styles.bottomNavigator,
+                { bottom: Math.max(insets.bottom, 16) },
+              ]}
             >
-              <Ionicons name={screen === "profile" ? "person" : "person-outline"} size={24} color={screen === "profile" ? colors.link : colors.textMuted} />
-              <Text style={[styles.bottomTabText, screen === "profile" && styles.bottomTabTextActive]}>Perfil</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Abrir aprendizado"
-              style={styles.bottomTab}
-              onPress={() => {
-                setSettingsOpen(false);
-                setScreen("levels");
-              }}
-            >
-              <Ionicons name={screen !== "profile" ? "school" : "school-outline"} size={24} color={screen !== "profile" ? colors.link : colors.textMuted} />
-              <Text style={[styles.bottomTabText, screen !== "profile" && styles.bottomTabTextActive]}>Aprender</Text>
-            </Pressable>
-          </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Abrir perfil"
+                style={styles.bottomTab}
+                onPress={() => {
+                  setSettingsOpen(false);
+                  setScreen("profile");
+                }}
+              >
+                <Ionicons name={screen === "profile" ? "person" : "person-outline"} size={24} color={screen === "profile" ? colors.link : colors.textMuted} />
+                <Text style={[styles.bottomTabText, screen === "profile" && styles.bottomTabTextActive]}>Perfil</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Abrir aprendizado"
+                style={styles.bottomTab}
+                onPress={() => {
+                  setSettingsOpen(false);
+                  setScreen("levels");
+                }}
+              >
+                <Ionicons name={screen !== "profile" ? "school" : "school-outline"} size={24} color={screen !== "profile" ? colors.link : colors.textMuted} />
+                <Text style={[styles.bottomTabText, screen !== "profile" && styles.bottomTabTextActive]}>Aprender</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </>
       ) : screen === "forgot-password" ? (
         <ForgotPasswordScreen onBack={() => setScreen("login")} />
@@ -396,7 +413,6 @@ function createStyles(colors, shadows) {
     bottomNavigator: {
       position: "absolute",
       right: 18,
-      bottom: 16,
       left: 18,
       height: 72,
       zIndex: 80,

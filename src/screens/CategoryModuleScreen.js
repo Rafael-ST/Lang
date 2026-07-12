@@ -35,6 +35,7 @@ const EXERCISE_TYPES = {
 export default function CategoryModuleScreen({
   category,
   exerciseSet,
+  isReviewMode = false,
   onBack,
   onProfileChange,
   soundEnabled = true,
@@ -65,7 +66,10 @@ export default function CategoryModuleScreen({
   const [pointsError, setPointsError] = useState("");
   const [isExitModalVisible, setIsExitModalVisible] = useState(false);
   const [isNoPointsModalVisible, setIsNoPointsModalVisible] = useState(false);
+  const [answerStats, setAnswerStats] = useState({ correct: 0, wrong: 0 });
+  const [completionStats, setCompletionStats] = useState(null);
   const nextExerciseTimeout = useRef(null);
+  const exerciseSetStartedAt = useRef(null);
   const correctSoundPlayer = useAudioPlayer(
     require("../../assets/correct-answer.ogg"),
     { keepAudioSessionActive: true }
@@ -194,7 +198,9 @@ export default function CategoryModuleScreen({
       setExercisesError("");
 
       try {
-        const data = await fetchExercisesBySet(exerciseSet?.id);
+        const data = await fetchExercisesBySet(exerciseSet?.id, {
+          includeCompleted: isReviewMode,
+        });
 
         if (isMounted) {
           const nextExercises = normalizeExerciseList(data);
@@ -206,8 +212,13 @@ export default function CategoryModuleScreen({
           setSelectedExerciseIndex(0);
           setCompletedExerciseIds([]);
           setPostponedExerciseIds([]);
+          setAnswerStats({ correct: 0, wrong: 0 });
+          setCompletionStats(null);
+          exerciseSetStartedAt.current = Date.now();
           setIsSetCompleted(
-            isExerciseSetCompleted(exerciseSet) || nextExercises.length === 0
+            isReviewMode
+              ? false
+              : isExerciseSetCompleted(exerciseSet) || nextExercises.length === 0
           );
           setWrongOptionId(null);
           setCorrectOptionId(null);
@@ -236,7 +247,7 @@ export default function CategoryModuleScreen({
       isMounted = false;
       clearTimeout(nextExerciseTimeout.current);
     };
-  }, [exerciseSet]);
+  }, [exerciseSet, isReviewMode]);
 
   useEffect(() => {
     try {
@@ -723,6 +734,14 @@ export default function CategoryModuleScreen({
       return null;
     }
 
+    if (isReviewMode) {
+      return {
+        exercise_completed: Boolean(payload?.is_correct),
+        review: true,
+        set_completed: pendingExercises.length <= 1,
+      };
+    }
+
     try {
       return await completeExercise(selectedExercise.id, payload);
     } catch {
@@ -769,6 +788,13 @@ export default function CategoryModuleScreen({
       return;
     }
 
+    const nextStats = {
+      correct: answerStats.correct + (wasCorrect ? 1 : 0),
+      wrong: answerStats.wrong + (wasCorrect ? 0 : 1),
+    };
+
+    setAnswerStats(nextStats);
+
     if (!wasCorrect) {
       setPostponedExerciseIds((currentIds) => [
         ...new Set([...currentIds, selectedExercise.id]),
@@ -784,6 +810,12 @@ export default function CategoryModuleScreen({
       setPostponedExerciseIds((currentIds) =>
         currentIds.filter((id) => id !== selectedExercise.id)
       );
+      setCompletionStats({
+        correct: nextStats.correct,
+        durationMs: Date.now() - (exerciseSetStartedAt.current || Date.now()),
+        total: playableExercises.length,
+        wrong: nextStats.wrong,
+      });
       setIsSetCompleted(true);
       setSelectedExerciseIndex(0);
       return;
@@ -799,7 +831,7 @@ export default function CategoryModuleScreen({
   }
 
   async function resetCurrentExerciseSetIfNeeded() {
-    if (!exerciseSet?.id || isSetCompleted) {
+    if (isReviewMode || !exerciseSet?.id || isSetCompleted) {
       return;
     }
 
@@ -838,6 +870,32 @@ export default function CategoryModuleScreen({
           <Text style={styles.translationText}>
             Você concluiu este conjunto de exercicios.
           </Text>
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Tempo</Text>
+              <Text style={styles.summaryValue}>
+                {formatDuration(completionStats?.durationMs ?? 0)}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total</Text>
+              <Text style={styles.summaryValue}>
+                {completionStats?.total ?? playableExercises.length}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Certas</Text>
+              <Text style={[styles.summaryValue, styles.summaryValueSuccess]}>
+                {completionStats?.correct ?? answerStats.correct}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Erradas</Text>
+              <Text style={[styles.summaryValue, styles.summaryValueError]}>
+                {completionStats?.wrong ?? answerStats.wrong}
+              </Text>
+            </View>
+          </View>
           <Pressable style={styles.nextButton} onPress={onBack}>
             <Text style={styles.nextButtonText}>Voltar</Text>
           </Pressable>
@@ -1559,6 +1617,18 @@ function normalizeExerciseList(data) {
   return [];
 }
 
+function formatDuration(durationMs) {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes <= 0) {
+    return `${seconds}s`;
+  }
+
+  return `${minutes}min ${String(seconds).padStart(2, "0")}s`;
+}
+
 function isExerciseSetCompleted(exerciseSet) {
   return (
     exerciseSet?.is_completed ||
@@ -1658,6 +1728,40 @@ function createStyles(colors, shadows) {
       fontWeight: "800",
       lineHeight: 28,
       textAlign: "center",
+    },
+    summaryCard: {
+      width: "100%",
+      gap: 10,
+      marginTop: 22,
+      marginBottom: 18,
+      padding: 16,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    summaryRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    summaryLabel: {
+      color: colors.textMutedDark,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    summaryValue: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: "900",
+      textAlign: "right",
+    },
+    summaryValueSuccess: {
+      color: colors.success,
+    },
+    summaryValueError: {
+      color: colors.error,
     },
     promptText: {
       color: colors.textPrimary,
