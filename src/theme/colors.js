@@ -14,6 +14,7 @@ export const lightColors = {
   link: "#7a5c3b",
   shadow: "#7b6a58",
   error: "#F57C64",
+  newWord: "#C55F0A",
   success: "#64C878",
 };
 
@@ -33,6 +34,7 @@ export const darkColors = {
   link: "#d9b982",
   shadow: "#000000",
   error: "#ff8a80",
+  newWord: "#FFB15C",
   success: "#80d88f",
 };
 

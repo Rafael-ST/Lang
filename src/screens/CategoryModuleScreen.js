@@ -14,7 +14,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
 import { API_BASE_URL } from "../config/api";
-import { fetchCards } from "../features/cards/services/cardsApi";
+import {
+  fetchCards,
+  markCardsAsSeen,
+} from "../features/cards/services/cardsApi";
 import {
   completeExercise,
   fetchExercisesBySet,
@@ -50,6 +53,9 @@ export default function CategoryModuleScreen({
   const [exercises, setExercises] = useState([]);
   const [translationCards, setTranslationCards] = useState([]);
   const [selectedWordTranslation, setSelectedWordTranslation] = useState(null);
+  const [firstSeenCardExerciseIds, setFirstSeenCardExerciseIds] = useState(
+    () => new Map()
+  );
   const [selectedExerciseIndex, setSelectedExerciseIndex] = useState(0);
   const [wrongOptionId, setWrongOptionId] = useState(null);
   const [correctOptionId, setCorrectOptionId] = useState(null);
@@ -77,6 +83,7 @@ export default function CategoryModuleScreen({
   const [completionStats, setCompletionStats] = useState(null);
   const nextExerciseTimeout = useRef(null);
   const exerciseSetStartedAt = useRef(null);
+  const submittedCardAccessIds = useRef(new Set());
   const progressAnimation = useRef(new Animated.Value(0)).current;
   const correctSoundPlayer = useAudioPlayer(
     require("../../assets/correct-answer.ogg"),
@@ -124,6 +131,7 @@ export default function CategoryModuleScreen({
       if (key && card?.international_name && card?.is_active !== false) {
         translations.set(key, {
           audioUri: getCardAudioUri(card),
+          cardId: String(card.id),
           translation: card.international_name,
         });
       }
@@ -137,6 +145,7 @@ export default function CategoryModuleScreen({
     if (selectedCardKey && selectedCardTranslation) {
       translations.set(selectedCardKey, {
         audioUri: getCardAudioUri(selectedCard),
+        cardId: String(selectedCard.id),
         translation: selectedCardTranslation,
       });
     }
@@ -144,6 +153,41 @@ export default function CategoryModuleScreen({
     return translations;
   }, [exercises, selectedCard, translationCards, translationText]);
   const expectedTranscript = getExpectedTranscript(selectedExercise);
+  const visibleWordCardIds = useMemo(() => {
+    const visibleTexts = [];
+
+    if (isEnglishExerciseTitle(exerciseType)) {
+      visibleTexts.push(moduleName);
+    }
+
+    if (exerciseType === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO) {
+      visibleTexts.push(getPromptText(selectedExercise));
+    }
+
+    if (exerciseType === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT) {
+      visibleTexts.push(
+        expectedTranscript || getPromptText(selectedExercise)
+      );
+    }
+
+    return [
+      ...new Set(
+        visibleTexts.flatMap((text) =>
+          splitEnglishText(text)
+            .map((part) =>
+              wordTranslations.get(normalizeTranslationKey(part))?.cardId
+            )
+            .filter(Boolean)
+        )
+      ),
+    ];
+  }, [
+    exerciseType,
+    expectedTranscript,
+    moduleName,
+    selectedExercise,
+    wordTranslations,
+  ]);
   const audioUri = getAudioUri(selectedExercise);
   const username = user?.username || user?.email;
   const isProfilePending = Boolean(username && !profile && !pointsError);
@@ -243,6 +287,64 @@ export default function CategoryModuleScreen({
   useEffect(() => {
     setSelectedWordTranslation(null);
   }, [selectedExercise?.id]);
+
+  useEffect(() => {
+    if (
+      !selectedExercise?.id ||
+      isLoadingExercises ||
+      isProfilePending ||
+      hasNoPoints ||
+      pointsError
+    ) {
+      return;
+    }
+
+    const cardIdsToSubmit = visibleWordCardIds.filter(
+      (cardId) => !submittedCardAccessIds.current.has(cardId)
+    );
+
+    if (!cardIdsToSubmit.length) {
+      return;
+    }
+
+    cardIdsToSubmit.forEach((cardId) =>
+      submittedCardAccessIds.current.add(cardId)
+    );
+    const firstSeenExerciseId = selectedExercise.id;
+
+    markCardsAsSeen(cardIdsToSubmit)
+      .then((result) => {
+        const newCardIds = result?.first_seen_card_ids || [];
+
+        if (newCardIds.length) {
+          setFirstSeenCardExerciseIds((currentExerciseIds) => {
+            const nextExerciseIds = new Map(currentExerciseIds);
+
+            newCardIds.forEach((cardId) =>
+              nextExerciseIds.set(cardId, firstSeenExerciseId)
+            );
+
+            return nextExerciseIds;
+          });
+        }
+      })
+      .catch((error) => {
+        cardIdsToSubmit.forEach((cardId) =>
+          submittedCardAccessIds.current.delete(cardId)
+        );
+        console.warn(
+          "[cards] Nao foi possivel registrar o primeiro acesso:",
+          error
+        );
+      });
+  }, [
+    hasNoPoints,
+    isLoadingExercises,
+    isProfilePending,
+    pointsError,
+    selectedExercise?.id,
+    visibleWordCardIds,
+  ]);
 
   useEffect(() => {
     if (!speechRecognition) {
@@ -1050,6 +1152,9 @@ export default function CategoryModuleScreen({
         </View>
         {isEnglishExerciseTitle(exerciseType) ? (
           <ClickableEnglishText
+            exerciseId={selectedExercise?.id}
+            firstSeenCardExerciseIds={firstSeenCardExerciseIds}
+            firstSeenStyle={styles.firstSeenWord}
             linkStyle={styles.translatableWord}
             style={styles.moduleName}
             text={moduleName}
@@ -1147,6 +1252,9 @@ export default function CategoryModuleScreen({
             {exerciseType === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO &&
             getPromptText(selectedExercise) ? (
               <ClickableEnglishText
+                exerciseId={selectedExercise?.id}
+                firstSeenCardExerciseIds={firstSeenCardExerciseIds}
+                firstSeenStyle={styles.firstSeenWord}
                 linkStyle={styles.translatableWord}
                 style={styles.promptText}
                 text={getPromptText(selectedExercise)}
@@ -1197,6 +1305,9 @@ export default function CategoryModuleScreen({
         ) : exerciseType === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ? (
           <View style={styles.speechContent}>
             <ClickableEnglishText
+              exerciseId={selectedExercise?.id}
+              firstSeenCardExerciseIds={firstSeenCardExerciseIds}
+              firstSeenStyle={styles.firstSeenWord}
               linkStyle={styles.translatableWord}
               style={styles.promptText}
               text={
@@ -1419,15 +1530,16 @@ function playAudio(player) {
 }
 
 function ClickableEnglishText({
+  exerciseId,
+  firstSeenCardExerciseIds,
+  firstSeenStyle,
   linkStyle,
   onTranslationSelect,
   style,
   text,
   translations,
 }) {
-  const parts = String(text || "").split(
-    /([A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*)/g
-  );
+  const parts = splitEnglishText(text);
 
   return (
     <Text style={style}>
@@ -1445,10 +1557,17 @@ function ClickableEnglishText({
             accessibilityHint={`Exibe a traducao de ${part}`}
             accessibilityRole="link"
             key={`${part}-${index}`}
-            style={linkStyle}
+            style={[
+              linkStyle,
+              firstSeenCardExerciseIds.get(translationEntry.cardId) ===
+              exerciseId
+                ? firstSeenStyle
+                : null,
+            ]}
             onPress={() =>
               onTranslationSelect({
                 audioUri: translationEntry.audioUri,
+                cardId: translationEntry.cardId,
                 word: part,
                 translation: translationEntry.translation,
               })
@@ -1459,6 +1578,12 @@ function ClickableEnglishText({
         );
       })}
     </Text>
+  );
+}
+
+function splitEnglishText(value) {
+  return String(value || "").split(
+    /([A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*)/g
   );
 }
 
@@ -1974,6 +2099,9 @@ function createStyles(colors, shadows) {
     translatableWord: {
       color: colors.link,
       textDecorationLine: "underline",
+    },
+    firstSeenWord: {
+      color: colors.newWord,
     },
     titleTranslationText: {
       color: colors.textSecondary,
