@@ -22,6 +22,7 @@ import RegisterScreen from "../screens/RegisterScreen";
 import LearningLevelsScreen from "../screens/LearningLevelsScreen";
 import SublevelsScreen from "../screens/SublevelsScreen";
 import ExerciseSetsScreen from "../screens/ExerciseSetsScreen";
+import ExerciseSetIntroductionScreen from "../screens/ExerciseSetIntroductionScreen";
 import CategoryModuleScreen from "../screens/CategoryModuleScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
@@ -222,6 +223,18 @@ export default function AppNavigator() {
                 setScreen("exercise-sets");
               }}
             />
+          ) : screen === "exercise-set-introduction" ? (
+            <ExerciseSetIntroductionScreen
+              exerciseSet={selectedExerciseSet}
+              isReviewMode={isReviewMode}
+              sublevel={selectedSublevel}
+              onBack={() => {
+                setSelectedExerciseSet(null);
+                setIsReviewMode(false);
+                setScreen("exercise-sets");
+              }}
+              onStart={() => setScreen("category-module")}
+            />
           ) : screen === "exercise-sets" ? (
             <ExerciseSetsScreen
               sublevel={selectedSublevel}
@@ -234,7 +247,7 @@ export default function AppNavigator() {
                 setSelectedExerciseSet(exerciseSet);
                 setSelectedCategory(null);
                 setIsReviewMode(Boolean(options.isReview));
-                setScreen("category-module");
+                setScreen("exercise-set-introduction");
               }}
             />
           ) : screen === "logged" ? (
@@ -357,7 +370,8 @@ export default function AppNavigator() {
             ) : null}
           </View>
 
-          {screen !== "category-module" ? (
+          {screen !== "category-module" &&
+          screen !== "exercise-set-introduction" ? (
             <View
               style={[
                 styles.bottomNavigator,

@@ -123,11 +123,6 @@ export default function ExerciseSetsScreen({
                     >
                       {exerciseSet.title || "Conjunto sem titulo"}
                     </Text>
-                    {exerciseSet.description ? (
-                      <Text style={styles.exerciseSetDescription}>
-                        {exerciseSet.description}
-                      </Text>
-                    ) : null}
                     {!isActive ? (
                       <Text style={styles.exerciseSetStatus}>Inativo</Text>
                     ) : isLocked ? (
@@ -296,13 +291,6 @@ function createStyles(colors, shadows) {
     },
     exerciseSetTitleDisabled: {
       color: colors.textMuted,
-    },
-    exerciseSetDescription: {
-      color: colors.textMutedDark,
-      fontSize: 13,
-      fontWeight: "600",
-      lineHeight: 18,
-      marginTop: 4,
     },
     exerciseSetStatus: {
       color: colors.textMutedDark,

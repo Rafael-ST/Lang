@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
 import { API_BASE_URL } from "../config/api";
+import { fetchCards } from "../features/cards/services/cardsApi";
 import {
   completeExercise,
   fetchExercisesBySet,
@@ -47,6 +48,8 @@ export default function CategoryModuleScreen({
 }) {
   const { colors, shadows } = useTheme();
   const [exercises, setExercises] = useState([]);
+  const [translationCards, setTranslationCards] = useState([]);
+  const [selectedWordTranslation, setSelectedWordTranslation] = useState(null);
   const [selectedExerciseIndex, setSelectedExerciseIndex] = useState(0);
   const [wrongOptionId, setWrongOptionId] = useState(null);
   const [correctOptionId, setCorrectOptionId] = useState(null);
@@ -111,6 +114,35 @@ export default function CategoryModuleScreen({
     sublevel?.nome ||
     "Modulo";
   const translationText = getTranslationText(selectedExercise);
+  const wordTranslations = useMemo(() => {
+    const cardsFromExercises = exercises.map(getExerciseCard).filter(Boolean);
+    const translations = new Map();
+
+    [...translationCards, ...cardsFromExercises].forEach((card) => {
+      const key = normalizeTranslationKey(card?.english_name);
+
+      if (key && card?.international_name && card?.is_active !== false) {
+        translations.set(key, {
+          audioUri: getCardAudioUri(card),
+          translation: card.international_name,
+        });
+      }
+    });
+
+    const selectedCardKey = normalizeTranslationKey(selectedCard?.english_name);
+
+    const selectedCardTranslation =
+      selectedCard?.international_name || translationText;
+
+    if (selectedCardKey && selectedCardTranslation) {
+      translations.set(selectedCardKey, {
+        audioUri: getCardAudioUri(selectedCard),
+        translation: selectedCardTranslation,
+      });
+    }
+
+    return translations;
+  }, [exercises, selectedCard, translationCards, translationText]);
   const expectedTranscript = getExpectedTranscript(selectedExercise);
   const audioUri = getAudioUri(selectedExercise);
   const username = user?.username || user?.email;
@@ -120,7 +152,37 @@ export default function CategoryModuleScreen({
     null,
     { keepAudioSessionActive: true }
   );
+  const translationAudioPlayer = useAudioPlayer(
+    null,
+    { keepAudioSessionActive: true }
+  );
   const speechRecognition = useMemo(() => getSpeechRecognitionModule(), []);
+
+  function handleTranslationSelect(nextTranslation) {
+    const isSameWord =
+      normalizeTranslationKey(selectedWordTranslation?.word) ===
+      normalizeTranslationKey(nextTranslation.word);
+
+    if (isSameWord) {
+      setSelectedWordTranslation(null);
+      return;
+    }
+
+    setSelectedWordTranslation(nextTranslation);
+
+    if (nextTranslation.audioUri) {
+      try {
+        translationAudioPlayer.replace({ uri: nextTranslation.audioUri });
+        playAudio(translationAudioPlayer);
+      } catch (error) {
+        console.warn(
+          "[audio] Nao foi possivel tocar o audio da traducao:",
+          error
+        );
+      }
+    }
+  }
+
   const optionCards = useMemo(() => {
     if (exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION) {
       return [];
@@ -155,6 +217,32 @@ export default function CategoryModuleScreen({
       })),
     ]);
   }, [exerciseType, playableExercises, selectedCard, selectedExercise]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadTranslationCards() {
+      try {
+        const data = await fetchCards();
+
+        if (isMounted) {
+          setTranslationCards(normalizeExerciseList(data));
+        }
+      } catch {
+        // The exercise card still provides a local translation fallback.
+      }
+    }
+
+    loadTranslationCards();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectedWordTranslation(null);
+  }, [selectedExercise?.id]);
 
   useEffect(() => {
     if (!speechRecognition) {
@@ -960,9 +1048,29 @@ export default function CategoryModuleScreen({
             </Animated.View>
           </View>
         </View>
-        <Text style={styles.moduleName}>{moduleName}</Text>
+        {isEnglishExerciseTitle(exerciseType) ? (
+          <ClickableEnglishText
+            linkStyle={styles.translatableWord}
+            style={styles.moduleName}
+            text={moduleName}
+            translations={wordTranslations}
+            onTranslationSelect={handleTranslationSelect}
+          />
+        ) : (
+          <Text style={styles.moduleName}>{moduleName}</Text>
+        )}
         {translationText ? (
           <Text style={styles.titleTranslationText}>{translationText}</Text>
+        ) : null}
+        {selectedWordTranslation ? (
+          <View style={styles.wordTranslationCard}>
+            <Text style={styles.wordTranslationLabel}>
+              {selectedWordTranslation.word}
+            </Text>
+            <Text style={styles.wordTranslationText}>
+              {selectedWordTranslation.translation}
+            </Text>
+          </View>
         ) : null}
 
         <View style={styles.exerciseBody}>
@@ -1038,9 +1146,13 @@ export default function CategoryModuleScreen({
 
             {exerciseType === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO &&
             getPromptText(selectedExercise) ? (
-              <Text style={styles.promptText}>
-                {getPromptText(selectedExercise)}
-              </Text>
+              <ClickableEnglishText
+                linkStyle={styles.translatableWord}
+                style={styles.promptText}
+                text={getPromptText(selectedExercise)}
+                translations={wordTranslations}
+                onTranslationSelect={handleTranslationSelect}
+              />
             ) : null}
 
             <TextInput
@@ -1084,9 +1196,17 @@ export default function CategoryModuleScreen({
           </View>
         ) : exerciseType === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ? (
           <View style={styles.speechContent}>
-            <Text style={styles.promptText}>
-              {expectedTranscript || getPromptText(selectedExercise) || "Texto indisponivel"}
-            </Text>
+            <ClickableEnglishText
+              linkStyle={styles.translatableWord}
+              style={styles.promptText}
+              text={
+                expectedTranscript ||
+                getPromptText(selectedExercise) ||
+                "Texto indisponivel"
+              }
+              translations={wordTranslations}
+              onTranslationSelect={handleTranslationSelect}
+            />
 
             {audioUri ? (
               <Pressable
@@ -1298,6 +1418,56 @@ function playAudio(player) {
   }
 }
 
+function ClickableEnglishText({
+  linkStyle,
+  onTranslationSelect,
+  style,
+  text,
+  translations,
+}) {
+  const parts = String(text || "").split(
+    /([A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*)/g
+  );
+
+  return (
+    <Text style={style}>
+      {parts.map((part, index) => {
+        const translationEntry = translations.get(
+          normalizeTranslationKey(part)
+        );
+
+        if (!translationEntry?.translation) {
+          return part;
+        }
+
+        return (
+          <Text
+            accessibilityHint={`Exibe a traducao de ${part}`}
+            accessibilityRole="link"
+            key={`${part}-${index}`}
+            style={linkStyle}
+            onPress={() =>
+              onTranslationSelect({
+                audioUri: translationEntry.audioUri,
+                word: part,
+                translation: translationEntry.translation,
+              })
+            }
+          >
+            {part}
+          </Text>
+        );
+      })}
+    </Text>
+  );
+}
+
+function normalizeTranslationKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
 function getSpeechRecognitionModule() {
   try {
     return require("expo-speech-recognition").ExpoSpeechRecognitionModule;
@@ -1368,6 +1538,13 @@ function isWrittenAnswerExerciseType(type) {
   return (
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO ||
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO
+  );
+}
+
+function isEnglishExerciseTitle(type) {
+  return (
+    type !== EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO &&
+    type !== EXERCISE_TYPES.SPEAK_WRITTEN_TEXT
   );
 }
 
@@ -1445,6 +1622,10 @@ function getAudioUri(exercise) {
   }
 
   return replaceLocalhostOrigin(promptAudioUri || cardAudioUri || "");
+}
+
+function getCardAudioUri(card) {
+  return replaceLocalhostOrigin(card?.audio_url || card?.audio || "");
 }
 
 function getExpectedTranscript(exercise) {
@@ -1790,6 +1971,10 @@ function createStyles(colors, shadows) {
       paddingVertical: 24,
       marginBottom: 6,
     },
+    translatableWord: {
+      color: colors.link,
+      textDecorationLine: "underline",
+    },
     titleTranslationText: {
       color: colors.textSecondary,
       fontSize: 20,
@@ -1797,6 +1982,32 @@ function createStyles(colors, shadows) {
       lineHeight: 28,
       textAlign: "center",
       marginBottom: 20,
+    },
+    wordTranslationCard: {
+      alignSelf: "center",
+      minWidth: 150,
+      marginBottom: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    wordTranslationLabel: {
+      color: colors.textMutedDark,
+      fontSize: 12,
+      fontWeight: "800",
+      textAlign: "center",
+      textTransform: "uppercase",
+    },
+    wordTranslationText: {
+      color: colors.textPrimary,
+      fontSize: 18,
+      fontWeight: "800",
+      lineHeight: 24,
+      marginTop: 3,
+      textAlign: "center",
     },
     exerciseBody: {
       flex: 1,
