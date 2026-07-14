@@ -32,6 +32,7 @@ import { useTheme } from "../theme";
 const EXERCISE_TYPES = {
   JUST_AUDIO: "JUST_AUDIO",
   MULTIPLE_CHOICE_TRANSLATION: "multiple_choice_translation",
+  MULTIPLE_CHOICE_AUDIO_ENGLISH: "multiple_choice_audio_english",
   SPEAK_WRITTEN_TEXT: "speak_written_text",
   WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
   WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
@@ -228,7 +229,10 @@ export default function CategoryModuleScreen({
   }
 
   const optionCards = useMemo(() => {
-    if (exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION) {
+    if (
+      exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION &&
+      exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH
+    ) {
       return [];
     }
 
@@ -238,7 +242,13 @@ export default function CategoryModuleScreen({
       return configuredOptions;
     }
 
-    if (!selectedCard?.international_name) {
+    const useEnglishOptions =
+      exerciseType === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH;
+    const selectedOptionText = useEnglishOptions
+      ? selectedCard?.english_name
+      : selectedCard?.international_name;
+
+    if (!selectedOptionText) {
       return [];
     }
 
@@ -246,18 +256,20 @@ export default function CategoryModuleScreen({
       playableExercises
         .map(getExerciseCard)
         .filter(
-          (card) => card?.id !== selectedCard.id && card?.international_name
+          (card) =>
+            card?.id !== selectedCard.id &&
+            (useEnglishOptions ? card?.english_name : card?.international_name)
         )
     );
 
     return shuffleItems([
       {
         id: selectedCard.id,
-        text: selectedCard.international_name,
+        text: selectedOptionText,
       },
       ...wrongCards.slice(0, 3).map((card) => ({
         id: card.id,
-        text: card.international_name,
+        text: useEnglishOptions ? card.english_name : card.international_name,
       })),
     ]);
   }, [exerciseType, playableExercises, selectedCard, selectedExercise]);
@@ -939,7 +951,10 @@ export default function CategoryModuleScreen({
     }
 
     try {
-      return await completeExercise(selectedExercise.id, payload);
+      return await completeExercise(selectedExercise.id, {
+        ...payload,
+        duration_ms: Date.now() - (exerciseSetStartedAt.current || Date.now()),
+      });
     } catch {
       setCorrectOptionId(null);
       setWrongOptionId(null);
@@ -1150,7 +1165,8 @@ export default function CategoryModuleScreen({
             </Animated.View>
           </View>
         </View>
-        {isEnglishExerciseTitle(exerciseType) ? (
+        {exerciseType === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ? null :
+        isEnglishExerciseTitle(exerciseType) ? (
           <ClickableEnglishText
             exerciseId={selectedExercise?.id}
             firstSeenCardExerciseIds={firstSeenCardExerciseIds}
@@ -1164,7 +1180,9 @@ export default function CategoryModuleScreen({
         ) : (
           <Text style={styles.moduleName}>{moduleName}</Text>
         )}
-        {translationText ? (
+        {translationText &&
+        exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION &&
+        exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ? (
           <Text style={styles.titleTranslationText}>{translationText}</Text>
         ) : null}
         {selectedWordTranslation ? (
@@ -1417,29 +1435,47 @@ export default function CategoryModuleScreen({
             </Pressable>
           </View>
         ) : optionCards.length ? (
-          <View style={styles.optionsList}>
-            {optionCards.map((card) => (
+          <View style={styles.multipleChoiceContent}>
+            {audioUri ? (
               <Pressable
-                key={card.id}
-                disabled={Boolean(
-                  correctOptionId ||
-                    wrongOptionId ||
-                    isLoadingProfile ||
-                    isSpendingPoint
-                )}
+                accessibilityLabel="Repetir audio"
                 style={({ pressed }) => [
-                  styles.optionItem,
-                  pressed && !correctOptionId && !wrongOptionId
-                    ? styles.optionItemPressed
-                    : null,
-                  wrongOptionId === card.id ? styles.optionItemWrong : null,
-                  correctOptionId === card.id ? styles.optionItemCorrect : null,
+                  styles.audioButton,
+                  pressed ? styles.audioButtonPressed : null,
                 ]}
-                onPress={() => handleOptionPress(card)}
+                onPress={() => playAudio(exerciseAudioPlayer)}
               >
-                <Text style={styles.optionText}>{card.text}</Text>
+                <Ionicons
+                  name="volume-high"
+                  size={26}
+                  color={colors.textPrimary}
+                />
               </Pressable>
-            ))}
+            ) : null}
+            <View style={styles.optionsList}>
+              {optionCards.map((card) => (
+                <Pressable
+                  key={card.id}
+                  disabled={Boolean(
+                    correctOptionId ||
+                      wrongOptionId ||
+                      isLoadingProfile ||
+                      isSpendingPoint
+                  )}
+                  style={({ pressed }) => [
+                    styles.optionItem,
+                    pressed && !correctOptionId && !wrongOptionId
+                      ? styles.optionItemPressed
+                      : null,
+                    wrongOptionId === card.id ? styles.optionItemWrong : null,
+                    correctOptionId === card.id ? styles.optionItemCorrect : null,
+                  ]}
+                  onPress={() => handleOptionPress(card)}
+                >
+                  <Text style={styles.optionText}>{card.text}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         ) : (
           <Text style={styles.helperText}>Nenhum exercicio encontrado.</Text>
@@ -1608,6 +1644,7 @@ function isSupportedExercise(exercise) {
   return (
     type === EXERCISE_TYPES.JUST_AUDIO ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
+    type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ||
     isWrittenAnswerExerciseType(type)
   );
@@ -1627,6 +1664,13 @@ function getExerciseType(exercise) {
     type === "MULTIPLE-CHOICE-TRANSLATION"
   ) {
     return EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION;
+  }
+
+  if (
+    type === "MULTIPLE_CHOICE_AUDIO_ENGLISH" ||
+    type === "MULTIPLE-CHOICE-AUDIO-ENGLISH"
+  ) {
+    return EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH;
   }
 
   if (
@@ -1654,6 +1698,7 @@ function isAudioFirstExerciseType(type) {
   return (
     type === EXERCISE_TYPES.JUST_AUDIO ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
+    type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO ||
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO
   );
@@ -2299,6 +2344,9 @@ function createStyles(colors, shadows) {
       flexWrap: "wrap",
       gap: 12,
       marginBottom: 18,
+    },
+    multipleChoiceContent: {
+      gap: 14,
     },
     optionItem: {
       width: "47%",

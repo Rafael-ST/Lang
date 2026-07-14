@@ -8,6 +8,7 @@ import {
   fetchCurrentUser,
   updateCurrentUser,
 } from "../features/users/services/usersApi";
+import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
 import { useTheme } from "../theme";
 
 export default function ProfileScreen({ onUserChange }) {
@@ -15,6 +16,7 @@ export default function ProfileScreen({ onUserChange }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [averageExerciseSetTimeMs, setAverageExerciseSetTimeMs] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -23,10 +25,12 @@ export default function ProfileScreen({ onUserChange }) {
 
   useEffect(() => {
     fetchCurrentUser()
-      .then((data) => {
+      .then(async (data) => {
         setFirstName(data.first_name || "");
         setLastName(data.last_name || "");
         setEmail(data.email || data.username || "");
+        const profile = await fetchProfileByUsername(data.username);
+        setAverageExerciseSetTimeMs(profile?.average_exercise_set_time_ms ?? null);
       })
       .catch((error) => {
         setIsError(true);
@@ -70,6 +74,14 @@ export default function ProfileScreen({ onUserChange }) {
         <Text style={styles.subtitle}>{email || "Seus dados pessoais"}</Text>
       </View>
       <View style={styles.card}>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>Tempo medio por conjunto concluido</Text>
+          <Text style={styles.statValue}>
+            {averageExerciseSetTimeMs == null
+              ? "Sem conjuntos concluidos"
+              : formatDuration(averageExerciseSetTimeMs)}
+          </Text>
+        </View>
         <AppTextField label="Nome" placeholder="Seu nome" value={firstName} onChangeText={setFirstName} />
         <AppTextField label="Sobrenome" placeholder="Seu sobrenome" value={lastName} onChangeText={setLastName} />
         <AppButton
@@ -91,8 +103,19 @@ function createStyles(colors, shadows) {
     title: { fontSize: 36, fontWeight: "800", color: colors.textPrimary, marginBottom: 8 },
     subtitle: { fontSize: 16, color: colors.textMutedDark },
     card: { backgroundColor: colors.surfaceMuted, borderRadius: 28, padding: 24, ...shadows.soft },
+    statCard: { marginBottom: 22, padding: 18, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+    statLabel: { color: colors.textMutedDark, fontSize: 13, fontWeight: "700", marginBottom: 6 },
+    statValue: { color: colors.textPrimary, fontSize: 22, fontWeight: "900" },
     message: { marginTop: 14, textAlign: "center", fontSize: 14, fontWeight: "700" },
     error: { color: colors.error },
     success: { color: colors.success },
   });
+}
+
+function formatDuration(durationMs) {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return minutes ? `${minutes}min ${String(seconds).padStart(2, "0")}s` : `${seconds}s`;
 }
