@@ -12,6 +12,9 @@ Aplicativo React Native com Expo para aprendizagem de idiomas por niveis, subniv
 npm install
 npm run android
 
+npx eas-cli@latest login
+npx eas-cli@latest build --platform android --profile preview
+
 ## Fluxo de conteudo
 
 ```txt
