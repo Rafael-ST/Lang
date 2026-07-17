@@ -1,4 +1,11 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useEffect, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
@@ -57,13 +64,18 @@ export default function ExerciseSetsScreen({
   }, [loading, sublevel?.id]);
 
   return (
-    <ScreenContainer contentStyle={styles.container}>
-      {loading ? (
-        <View style={styles.exerciseSetsCard}>
-          <Text style={styles.helperText}>Carregando...</Text>
-        </View>
-      ) : (
-        <View style={styles.exerciseSetsCard}>
+    <ScreenContainer contentStyle={styles.screen}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator
+      >
+        {loading ? (
+          <View style={styles.exerciseSetsCard}>
+            <Text style={styles.helperText}>Carregando...</Text>
+          </View>
+        ) : (
+          <View style={styles.exerciseSetsCard}>
           {onBack ? (
             <Pressable style={styles.backButton} onPress={onBack}>
               <Text style={styles.backButtonText}>Voltar para subniveis</Text>
@@ -143,8 +155,9 @@ export default function ExerciseSetsScreen({
               Nenhum conjunto de exercicios encontrado.
             </Text>
           )}
-        </View>
-      )}
+          </View>
+        )}
+      </ScrollView>
 
       <Modal
         animationType="fade"
@@ -221,12 +234,19 @@ function sortExerciseSetsByOrder(items) {
 
 function createStyles(colors, shadows) {
   return StyleSheet.create({
+    screen: {
+      flex: 1,
+    },
+    scrollView: {
+      flex: 1,
+    },
     container: {
+      flexGrow: 1,
       alignItems: "center",
       justifyContent: "flex-start",
       paddingHorizontal: 24,
       paddingTop: 96,
-      paddingBottom: 24,
+      paddingBottom: 120,
     },
     exerciseSetsCard: {
       width: "100%",

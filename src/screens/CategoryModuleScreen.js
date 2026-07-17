@@ -82,6 +82,7 @@ export default function CategoryModuleScreen({
   const [isNoPointsModalVisible, setIsNoPointsModalVisible] = useState(false);
   const [answerStats, setAnswerStats] = useState({ correct: 0, wrong: 0 });
   const [completionStats, setCompletionStats] = useState(null);
+  const [exerciseReplayVersion, setExerciseReplayVersion] = useState(0);
   const nextExerciseTimeout = useRef(null);
   const exerciseSetStartedAt = useRef(null);
   const submittedCardAccessIds = useRef(new Set());
@@ -239,7 +240,7 @@ export default function CategoryModuleScreen({
     const configuredOptions = getExerciseOptions(selectedExercise);
 
     if (configuredOptions.length) {
-      return configuredOptions;
+      return shuffleItems(configuredOptions);
     }
 
     const useEnglishOptions =
@@ -272,7 +273,13 @@ export default function CategoryModuleScreen({
         text: useEnglishOptions ? card.english_name : card.international_name,
       })),
     ]);
-  }, [exerciseType, playableExercises, selectedCard, selectedExercise]);
+  }, [
+    exerciseReplayVersion,
+    exerciseType,
+    playableExercises,
+    selectedCard,
+    selectedExercise,
+  ]);
 
   useEffect(() => {
     let isMounted = true;
@@ -298,7 +305,7 @@ export default function CategoryModuleScreen({
 
   useEffect(() => {
     setSelectedWordTranslation(null);
-  }, [selectedExercise?.id]);
+  }, [exerciseReplayVersion, selectedExercise?.id]);
 
   useEffect(() => {
     if (
@@ -481,6 +488,7 @@ export default function CategoryModuleScreen({
     audioUri,
     exerciseAudioPlayer,
     exerciseType,
+    exerciseReplayVersion,
     hasNoPoints,
     isProfilePending,
     soundEnabled,
@@ -1011,6 +1019,7 @@ export default function CategoryModuleScreen({
         ...new Set([...currentIds, selectedExercise.id]),
       ]);
       setSelectedExerciseIndex(0);
+      setExerciseReplayVersion((currentVersion) => currentVersion + 1);
       return;
     }
 
@@ -1182,7 +1191,8 @@ export default function CategoryModuleScreen({
         )}
         {translationText &&
         exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION &&
-        exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ? (
+        exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH &&
+        !isWrittenAnswerExerciseType(exerciseType) ? (
           <Text style={styles.titleTranslationText}>{translationText}</Text>
         ) : null}
         {selectedWordTranslation ? (
@@ -1265,20 +1275,6 @@ export default function CategoryModuleScreen({
                   color={colors.textPrimary}
                 />
               </Pressable>
-            ) : null}
-
-            {exerciseType === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO &&
-            getPromptText(selectedExercise) ? (
-              <ClickableEnglishText
-                exerciseId={selectedExercise?.id}
-                firstSeenCardExerciseIds={firstSeenCardExerciseIds}
-                firstSeenStyle={styles.firstSeenWord}
-                linkStyle={styles.translatableWord}
-                style={styles.promptText}
-                text={getPromptText(selectedExercise)}
-                translations={wordTranslations}
-                onTranslationSelect={handleTranslationSelect}
-              />
             ) : null}
 
             <TextInput
@@ -2142,7 +2138,6 @@ function createStyles(colors, shadows) {
       marginBottom: 6,
     },
     translatableWord: {
-      color: colors.link,
       textDecorationLine: "underline",
     },
     firstSeenWord: {
