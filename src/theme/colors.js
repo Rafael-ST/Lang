@@ -16,6 +16,7 @@ export const lightColors = {
   error: "#F57C64",
   newWord: "#C55F0A",
   success: "#64C878",
+  successGradient: ["#49B964", "#72D486", "#58C874"],
 };
 
 export const darkColors = {
@@ -36,6 +37,7 @@ export const darkColors = {
   error: "#ff8a80",
   newWord: "#FFB15C",
   success: "#80d88f",
+  successGradient: ["#4FB96A", "#86DE98", "#62CB7A"],
 };
 
 export const colors = lightColors;

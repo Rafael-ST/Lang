@@ -19,6 +19,10 @@ import {
   loadStoredUser,
   storeUser,
 } from "../services/authStorage";
+import {
+  cancelLoginReminder,
+  scheduleLoginReminder,
+} from "../services/loginReminder";
 
 const AuthContext = createContext(null);
 
@@ -118,6 +122,7 @@ export function AuthProvider({ children }) {
 
         setUser(profile);
         await storeUser(profile);
+        await scheduleLoginReminder().catch(() => false);
         setAuthError("");
       } catch (error) {
         setAuthError(error.message);
@@ -181,6 +186,7 @@ export function AuthProvider({ children }) {
 
       setUser(authenticatedUser);
       await storeUser(authenticatedUser);
+      await scheduleLoginReminder().catch(() => false);
     } catch (error) {
       throw error;
     } finally {
@@ -191,6 +197,7 @@ export function AuthProvider({ children }) {
   async function signOut() {
     setUser(null);
     await clearStoredUser();
+    await cancelLoginReminder().catch(() => null);
   }
 
   async function updateAuthenticatedUser(changes) {

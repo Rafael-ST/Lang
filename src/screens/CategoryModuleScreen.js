@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAudioPlayer } from "expo-audio";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import ScreenContainer from "../components/ScreenContainer";
@@ -1170,6 +1171,12 @@ export default function CategoryModuleScreen({
                 { width: animatedProgressWidth },
               ]}
             >
+              <LinearGradient
+                colors={colors.successGradient}
+                end={{ x: 1, y: 0 }}
+                start={{ x: 0, y: 0 }}
+                style={styles.progressGradient}
+              />
               <View style={styles.progressGlow} />
             </Animated.View>
           </View>
@@ -2126,6 +2133,10 @@ function createStyles(colors, shadows) {
       width: 12,
       borderRadius: 999,
       backgroundColor: "rgba(255, 255, 255, 0.32)",
+    },
+    progressGradient: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: 999,
     },
     moduleName: {
       color: colors.textPrimary,

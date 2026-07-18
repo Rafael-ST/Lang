@@ -26,6 +26,7 @@
       "expo-web-browser",
       "expo-asset",
       "expo-audio",
+      "expo-notifications",
       [
         "expo-speech-recognition",
         {
