@@ -33,6 +33,7 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="lang"/>
+        <data android:scheme="com.rafael.lang"/>
         <data android:scheme="exp+lang-login"/>
       </intent-filter>
     </activity>

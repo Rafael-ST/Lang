@@ -2,7 +2,10 @@
   "expo": {
     "name": "Lang",
     "slug": "lang-login",
-    "scheme": "lang",
+    "scheme": [
+      "lang",
+      "com.rafael.lang"
+    ],
     "android": {
       "package": "com.rafael.lang"
     },
@@ -28,7 +31,17 @@
         {
           "microphonePermission": "Permita que o Lang use o microfone para exercicios de fala.",
           "speechRecognitionPermission": "Permita que o Lang reconheca sua fala nos exercicios.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
       ]
     ],

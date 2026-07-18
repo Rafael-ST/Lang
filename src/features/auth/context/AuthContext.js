@@ -10,8 +10,10 @@ import {
   googleAuthConfig,
   isGoogleAuthConfigured,
 } from "../constants/googleAuthConfig";
-import { authenticateUser } from "../services/authApi";
-import { fetchGoogleUser } from "../services/googleAuthService";
+import {
+  authenticateUser,
+  authenticateWithGoogle,
+} from "../services/authApi";
 import {
   clearStoredUser,
   loadStoredUser,
@@ -85,14 +87,19 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const accessToken = response.authentication?.accessToken;
+        const idToken =
+          response.authentication?.idToken || response.params?.id_token;
 
-        if (!accessToken) {
+        if (!idToken) {
           throw new Error("Token de acesso não retornado pelo Google.");
         }
 
-        const profile = await fetchGoogleUser(accessToken);
-        const googleRefreshToken = getRefreshToken(profile?.token);
+        const tokenData = await authenticateWithGoogle(idToken);
+        const profile = {
+          ...(tokenData.usuario || {}),
+          token: tokenData,
+        };
+        const googleRefreshToken = getRefreshToken(tokenData);
 
         console.info(
           "[auth] Login Google - JSON de retorno:",
@@ -103,7 +110,7 @@ export function AuthProvider({ children }) {
           googleRefreshToken || "(nao retornado)"
         );
 
-        if (!hasRefreshToken(profile?.token)) {
+        if (!hasRefreshToken(tokenData)) {
           throw new Error(
             "Login Google nao retornou token da API. Use login por senha ou implemente a troca do token Google no backend."
           );

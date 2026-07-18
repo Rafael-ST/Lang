@@ -10,3 +10,11 @@ export function authenticateUser({ username, password }) {
     }),
   });
 }
+
+export function authenticateWithGoogle(idToken) {
+  return apiRequest("/auth/google/", {
+    method: "POST",
+    skipAuth: true,
+    body: JSON.stringify({ id_token: idToken }),
+  });
+}
