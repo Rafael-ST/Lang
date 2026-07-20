@@ -85,6 +85,8 @@ export default function CategoryModuleScreen({
   const [completionStats, setCompletionStats] = useState(null);
   const [exerciseReplayVersion, setExerciseReplayVersion] = useState(0);
   const nextExerciseTimeout = useRef(null);
+  const speechAnswerSubmitRef = useRef(null);
+  const isSubmittingSpeechAnswer = useRef(false);
   const exerciseSetStartedAt = useRef(null);
   const submittedCardAccessIds = useRef(new Set());
   const progressAnimation = useRef(new Animated.Value(0)).current;
@@ -93,6 +95,7 @@ export default function CategoryModuleScreen({
     { keepAudioSessionActive: true }
   );
   const styles = createStyles(colors, shadows);
+  speechAnswerSubmitRef.current = handleSpeechAnswerSubmit;
   const playableExercises = useMemo(
     () => exercises.filter(isSupportedExercise),
     [exercises]
@@ -383,6 +386,11 @@ export default function CategoryModuleScreen({
 
       if (transcript) {
         setSpokenTranscript(transcript);
+
+        if (event.isFinal) {
+          setIsListeningSpeech(false);
+          speechAnswerSubmitRef.current?.(transcript);
+        }
       }
     });
     const errorSubscription = speechRecognition.addListener("error", (event) => {
@@ -501,13 +509,14 @@ export default function CategoryModuleScreen({
     setSpokenTranscript("");
     setSpokenAnswerStatus(null);
     setSpeechError("");
+    isSubmittingSpeechAnswer.current = false;
 
     try {
       speechRecognition?.abort();
     } catch {
       // Speech recognition may already be inactive.
     }
-  }, [selectedExercise?.id, speechRecognition]);
+  }, [exerciseReplayVersion, selectedExercise?.id, speechRecognition]);
 
   useEffect(() => {
     if (!username) {
@@ -808,11 +817,11 @@ export default function CategoryModuleScreen({
     }
   }
 
-  async function handleSpeechAnswerSubmit() {
+  async function handleSpeechAnswerSubmit(recognizedTranscript = spokenTranscript) {
     if (
       isLoadingProfile ||
       isSpendingPoint ||
-      isListeningSpeech ||
+      isSubmittingSpeechAnswer.current ||
       spokenAnswerStatus === "correct" ||
       spokenAnswerStatus === "wrong"
     ) {
@@ -829,7 +838,15 @@ export default function CategoryModuleScreen({
       return;
     }
 
-    const isCorrect = isCorrectSpokenAnswer(spokenTranscript, selectedExercise);
+    if (!recognizedTranscript.trim()) {
+      return;
+    }
+
+    isSubmittingSpeechAnswer.current = true;
+    const isCorrect = isCorrectSpokenAnswer(
+      recognizedTranscript,
+      selectedExercise
+    );
 
     if (!isCorrect && vibrationEnabled) {
       Vibration.vibrate(500);
@@ -845,7 +862,7 @@ export default function CategoryModuleScreen({
 
     const completeResult = await completeCurrentExercise({
       answer: {
-        transcript: spokenTranscript,
+        transcript: recognizedTranscript,
         expected_transcript: expectedTranscript,
       },
       is_correct: isCorrect,
@@ -854,6 +871,7 @@ export default function CategoryModuleScreen({
 
     if (completeResult === null || nextPoints === null) {
       setSpokenAnswerStatus(null);
+      isSubmittingSpeechAnswer.current = false;
       return;
     }
 
@@ -1008,6 +1026,7 @@ export default function CategoryModuleScreen({
       return;
     }
 
+    const completedExerciseId = selectedExercise.id;
     const nextStats = {
       correct: answerStats.correct + (wasCorrect ? 1 : 0),
       wrong: answerStats.wrong + (wasCorrect ? 0 : 1),
@@ -1025,26 +1044,24 @@ export default function CategoryModuleScreen({
     }
 
     setProgressCompletedExerciseIds((currentIds) => [
-      ...new Set([...currentIds, selectedExercise.id]),
+      ...new Set([...currentIds, completedExerciseId]),
     ]);
 
     if (completeResult?.set_completed || pendingExercises.length <= 1) {
-      nextExerciseTimeout.current = setTimeout(() => {
-        setCompletedExerciseIds((currentIds) => [
-          ...new Set([...currentIds, selectedExercise.id]),
-        ]);
-        setPostponedExerciseIds((currentIds) =>
-          currentIds.filter((id) => id !== selectedExercise.id)
-        );
-        setCompletionStats({
-          correct: nextStats.correct,
-          durationMs: Date.now() - (exerciseSetStartedAt.current || Date.now()),
-          total: playableExercises.length,
-          wrong: nextStats.wrong,
-        });
-        setIsSetCompleted(true);
-        setSelectedExerciseIndex(0);
-      }, PROGRESS_ADVANCE_DELAY_MS);
+      setCompletedExerciseIds((currentIds) => [
+        ...new Set([...currentIds, completedExerciseId]),
+      ]);
+      setPostponedExerciseIds((currentIds) =>
+        currentIds.filter((id) => id !== completedExerciseId)
+      );
+      setCompletionStats({
+        correct: nextStats.correct,
+        durationMs: Date.now() - (exerciseSetStartedAt.current || Date.now()),
+        total: playableExercises.length,
+        wrong: nextStats.wrong,
+      });
+      setIsSetCompleted(true);
+      setSelectedExerciseIndex(0);
       return;
     }
 
@@ -1366,12 +1383,22 @@ export default function CategoryModuleScreen({
                 spokenAnswerStatus === "correct" ? styles.nextButtonCorrect : null,
                 spokenAnswerStatus === "wrong" ? styles.nextButtonWrong : null,
                 pressed ? styles.nextButtonPressed : null,
-                isSpendingPoint || spokenAnswerStatus ? styles.disabledButton : null,
+                isSpendingPoint && !spokenAnswerStatus
+                  ? styles.disabledButton
+                  : null,
               ]}
               onPress={handleSpeechStartPress}
             >
               <Text style={styles.nextButtonText}>
-                {isListeningSpeech ? "Parar" : "Falar"}
+                {spokenAnswerStatus === "correct"
+                  ? "Correto!"
+                  : spokenAnswerStatus === "wrong"
+                    ? "Incorreto"
+                    : isSpendingPoint
+                      ? "Verificando..."
+                      : isListeningSpeech
+                        ? "Parar"
+                        : "Falar"}
               </Text>
             </Pressable>
 
@@ -1389,31 +1416,6 @@ export default function CategoryModuleScreen({
             {speechError ? (
               <Text style={styles.errorText}>{speechError}</Text>
             ) : null}
-
-            <Pressable
-              disabled={Boolean(
-                !spokenTranscript.trim() ||
-                  isListeningSpeech ||
-                  isSpendingPoint ||
-                  spokenAnswerStatus
-              )}
-              style={({ pressed }) => [
-                styles.nextButton,
-                spokenAnswerStatus === "correct" ? styles.nextButtonCorrect : null,
-                spokenAnswerStatus === "wrong" ? styles.nextButtonWrong : null,
-                pressed ? styles.nextButtonPressed : null,
-                !spokenTranscript.trim() ||
-                isListeningSpeech ||
-                (isSpendingPoint && !spokenAnswerStatus)
-                  ? styles.disabledButton
-                  : null,
-              ]}
-              onPress={handleSpeechAnswerSubmit}
-            >
-              <Text style={styles.nextButtonText}>
-                {isSpendingPoint ? "Verificando..." : "Responder"}
-              </Text>
-            </Pressable>
 
             <Pressable
               disabled={Boolean(

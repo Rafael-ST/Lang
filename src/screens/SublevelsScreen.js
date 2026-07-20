@@ -77,30 +77,43 @@ export default function SublevelsScreen({
             <Text style={styles.errorText}>{sublevelsError}</Text>
           ) : sublevels.length ? (
             <View style={styles.sublevelsList}>
-              {sublevels.map((sublevel) => {
+              {sublevels.map((sublevel, index) => {
                 const isActive = sublevel.is_active !== false;
+                const isCompleted = Boolean(sublevel.is_completed);
+                const previousSublevel = sublevels[index - 1];
+                const isLocked = Boolean(
+                  index > 0 && !previousSublevel?.is_completed
+                );
+                const canPress = isActive && !isLocked;
 
                 return (
                   <Pressable
                     key={sublevel.id}
-                    disabled={!isActive}
+                    disabled={!canPress}
                     style={({ pressed }) => [
                       styles.sublevelItem,
-                      pressed && isActive ? styles.sublevelItemPressed : null,
-                      !isActive ? styles.sublevelItemDisabled : null,
+                      pressed && canPress ? styles.sublevelItemPressed : null,
+                      isCompleted ? styles.sublevelItemCompleted : null,
+                      !canPress ? styles.sublevelItemDisabled : null,
                     ]}
                     onPress={() => onSublevelPress?.(sublevel)}
                   >
                     <Text
                       style={[
                         styles.sublevelName,
-                        !isActive ? styles.sublevelNameDisabled : null,
+                        !canPress ? styles.sublevelNameDisabled : null,
                       ]}
                     >
                       {sublevel.nome || "Subnivel sem nome"}
                     </Text>
                     {!isActive ? (
                       <Text style={styles.sublevelStatus}>Inativo</Text>
+                    ) : isLocked ? (
+                      <Text style={styles.sublevelStatus}>
+                        Complete o anterior
+                      </Text>
+                    ) : isCompleted ? (
+                      <Text style={styles.sublevelCompleted}>Concluído</Text>
                     ) : null}
                   </Pressable>
                 );
@@ -177,6 +190,9 @@ function createStyles(colors, shadows) {
     sublevelItemDisabled: {
       opacity: 0.6,
     },
+    sublevelItemCompleted: {
+      borderColor: colors.success,
+    },
     sublevelName: {
       color: colors.textPrimary,
       fontSize: 16,
@@ -189,6 +205,13 @@ function createStyles(colors, shadows) {
       color: colors.textMutedDark,
       fontSize: 12,
       fontWeight: "700",
+      marginTop: 4,
+      textTransform: "uppercase",
+    },
+    sublevelCompleted: {
+      color: colors.success,
+      fontSize: 12,
+      fontWeight: "800",
       marginTop: 4,
       textTransform: "uppercase",
     },

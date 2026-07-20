@@ -47,6 +47,8 @@ export default function AppNavigator() {
   const [profile, setProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const rotation = useRef(new Animated.Value(0)).current;
+  const heartScale = useRef(new Animated.Value(1)).current;
+  const previousPoints = useRef(null);
   const settingsSoundPlayer = useAudioPlayer(
     require("../../assets/correct-answer.ogg"),
     { keepAudioSessionActive: true }
@@ -125,6 +127,38 @@ export default function AppNavigator() {
       isMounted = false;
     };
   }, [isLoggedIn, username]);
+
+  useEffect(() => {
+    const currentPoints = profile?.pontos;
+
+    if (typeof currentPoints !== "number") {
+      previousPoints.current = null;
+      return;
+    }
+
+    if (
+      typeof previousPoints.current === "number" &&
+      currentPoints < previousPoints.current
+    ) {
+      heartScale.stopAnimation();
+      heartScale.setValue(1);
+      Animated.sequence([
+        Animated.timing(heartScale, {
+          toValue: 1.35,
+          duration: 140,
+          useNativeDriver: true,
+        }),
+        Animated.spring(heartScale, {
+          toValue: 1,
+          friction: 4,
+          tension: 120,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+
+    previousPoints.current = currentPoints;
+  }, [heartScale, profile?.pontos]);
 
   async function handleVibrationChange(nextIsEnabled) {
     setIsVibrationEnabled(nextIsEnabled);
@@ -304,8 +338,11 @@ export default function AppNavigator() {
             <View style={styles.settingsControls}>
             <View style={styles.pointsBadge}>
               <Text style={styles.pointsText}>
-                {isLoadingProfile ? "..." : profile?.pontos ?? 0} pts
+                {isLoadingProfile ? "..." : profile?.pontos ?? 0}
               </Text>
+              <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+                <Ionicons name="heart" size={18} color={colors.error} />
+              </Animated.View>
             </View>
 
             <Pressable
@@ -492,10 +529,12 @@ function createStyles(colors, shadows) {
       ...shadows.soft,
     },
     pointsBadge: {
-      minWidth: 74,
+      width: 74,
       height: 38,
       paddingHorizontal: 12,
       borderRadius: 19,
+      flexDirection: "row",
+      gap: 6,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: colors.surfaceMuted,

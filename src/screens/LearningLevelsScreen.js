@@ -62,30 +62,41 @@ export default function LearningLevelsScreen({ loading = false, onLevelPress }) 
           ) : levelsError ? (
             <Text style={styles.errorText}>{levelsError}</Text>
           ) : levels.length ? (
-            levels.map((level) => {
+            levels.map((level, index) => {
               const isActive = level.is_active !== false;
+              const isCompleted = Boolean(level.is_completed);
+              const previousLevel = levels[index - 1];
+              const isLocked = Boolean(
+                index > 0 && !previousLevel?.is_completed
+              );
+              const canPress = isActive && !isLocked;
 
               return (
                 <Pressable
                   key={level.id}
-                  disabled={!isActive}
+                  disabled={!canPress}
                   style={({ pressed }) => [
                     styles.levelItem,
-                    pressed && isActive ? styles.levelItemPressed : null,
-                    !isActive ? styles.levelItemDisabled : null,
+                    pressed && canPress ? styles.levelItemPressed : null,
+                    isCompleted ? styles.levelItemCompleted : null,
+                    !canPress ? styles.levelItemDisabled : null,
                   ]}
                   onPress={() => onLevelPress?.(level)}
                 >
                   <Text
                     style={[
                       styles.levelName,
-                      !isActive ? styles.levelNameDisabled : null,
+                      !canPress ? styles.levelNameDisabled : null,
                     ]}
                   >
                     {level.nome || "Nivel sem nome"}
                   </Text>
                   {!isActive ? (
                     <Text style={styles.levelStatus}>Inativo</Text>
+                  ) : isLocked ? (
+                    <Text style={styles.levelStatus}>Complete o anterior</Text>
+                  ) : isCompleted ? (
+                    <Text style={styles.levelCompleted}>Concluído</Text>
                   ) : null}
                 </Pressable>
               );
@@ -136,6 +147,11 @@ function createStyles(colors, shadows) {
     levelItemDisabled: {
       opacity: 0.6,
     },
+    levelItemCompleted: {
+      borderLeftWidth: 3,
+      borderLeftColor: colors.success,
+      paddingLeft: 10,
+    },
     levelName: {
       color: colors.textPrimary,
       fontSize: 16,
@@ -148,6 +164,13 @@ function createStyles(colors, shadows) {
       color: colors.textMutedDark,
       fontSize: 12,
       fontWeight: "700",
+      marginTop: 4,
+      textTransform: "uppercase",
+    },
+    levelCompleted: {
+      color: colors.success,
+      fontSize: 12,
+      fontWeight: "800",
       marginTop: 4,
       textTransform: "uppercase",
     },
