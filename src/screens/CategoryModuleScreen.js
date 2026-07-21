@@ -34,11 +34,13 @@ const EXERCISE_TYPES = {
   JUST_AUDIO: "JUST_AUDIO",
   MULTIPLE_CHOICE_TRANSLATION: "multiple_choice_translation",
   MULTIPLE_CHOICE_AUDIO_ENGLISH: "multiple_choice_audio_english",
+  MATCHING_PAIRS: "matching_pairs",
   SPEAK_WRITTEN_TEXT: "speak_written_text",
   WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
   WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
 };
 const PROGRESS_ADVANCE_DELAY_MS = 650;
+const COMPLETION_COUNT_UP_DURATION_MS = 1200;
 
 export default function CategoryModuleScreen({
   category,
@@ -71,6 +73,9 @@ export default function CategoryModuleScreen({
   const [typedAnswerStatus, setTypedAnswerStatus] = useState(null);
   const [spokenTranscript, setSpokenTranscript] = useState("");
   const [spokenAnswerStatus, setSpokenAnswerStatus] = useState(null);
+  const [matchingSelection, setMatchingSelection] = useState(null);
+  const [matchedPairIds, setMatchedPairIds] = useState([]);
+  const [wrongMatchingPair, setWrongMatchingPair] = useState(null);
   const [isListeningSpeech, setIsListeningSpeech] = useState(false);
   const [speechError, setSpeechError] = useState("");
   const [isLoadingExercises, setIsLoadingExercises] = useState(false);
@@ -83,6 +88,12 @@ export default function CategoryModuleScreen({
   const [isNoPointsModalVisible, setIsNoPointsModalVisible] = useState(false);
   const [answerStats, setAnswerStats] = useState({ correct: 0, wrong: 0 });
   const [completionStats, setCompletionStats] = useState(null);
+  const [animatedCompletionStats, setAnimatedCompletionStats] = useState({
+    correct: 0,
+    durationMs: 0,
+    total: 0,
+    wrong: 0,
+  });
   const [exerciseReplayVersion, setExerciseReplayVersion] = useState(0);
   const nextExerciseTimeout = useRef(null);
   const speechAnswerSubmitRef = useRef(null);
@@ -92,6 +103,10 @@ export default function CategoryModuleScreen({
   const progressAnimation = useRef(new Animated.Value(0)).current;
   const correctSoundPlayer = useAudioPlayer(
     require("../../assets/correct-answer.ogg"),
+    { keepAudioSessionActive: true }
+  );
+  const celebrationSoundPlayer = useAudioPlayer(
+    require("../../assets/celebration.mp3"),
     { keepAudioSessionActive: true }
   );
   const styles = createStyles(colors, shadows);
@@ -284,6 +299,29 @@ export default function CategoryModuleScreen({
     selectedCard,
     selectedExercise,
   ]);
+  const matchingColumns = useMemo(() => {
+    if (exerciseType !== EXERCISE_TYPES.MATCHING_PAIRS) {
+      return { english: [], translations: [] };
+    }
+
+    const pairCards = getMatchingPairCards(selectedExercise);
+
+    return {
+      english: shuffleItems(
+        pairCards.map((card) => ({
+          audioUri: getCardAudioUri(card),
+          cardId: String(card.id),
+          text: card.english_name,
+        }))
+      ),
+      translations: shuffleItems(
+        pairCards.map((card) => ({
+          cardId: String(card.id),
+          text: card.international_name,
+        }))
+      ),
+    };
+  }, [exerciseReplayVersion, exerciseType, selectedExercise]);
 
   useEffect(() => {
     let isMounted = true;
@@ -451,6 +489,9 @@ export default function CategoryModuleScreen({
           setTypedAnswerStatus(null);
           setSpokenTranscript("");
           setSpokenAnswerStatus(null);
+          setMatchingSelection(null);
+          setMatchedPairIds([]);
+          setWrongMatchingPair(null);
           setSpeechError("");
         }
       } catch {
@@ -508,6 +549,9 @@ export default function CategoryModuleScreen({
     setTypedAnswerStatus(null);
     setSpokenTranscript("");
     setSpokenAnswerStatus(null);
+    setMatchingSelection(null);
+    setMatchedPairIds([]);
+    setWrongMatchingPair(null);
     setSpeechError("");
     isSubmittingSpeechAnswer.current = false;
 
@@ -557,6 +601,115 @@ export default function CategoryModuleScreen({
       isMounted = false;
     };
   }, [username]);
+
+  async function handleMatchingOptionPress(side, option) {
+    if (
+      matchedPairIds.includes(option.cardId) ||
+      wrongMatchingPair ||
+      isLoadingProfile ||
+      isSpendingPoint
+    ) {
+      return;
+    }
+
+    if (!profile) {
+      setPointsError("Perfil nao encontrado.");
+      return;
+    }
+
+    if (profile.pontos <= 0) {
+      setIsNoPointsModalVisible(true);
+      return;
+    }
+
+    if (side === "english" && soundEnabled && option.audioUri) {
+      try {
+        translationAudioPlayer.replace({ uri: option.audioUri });
+        playAudio(translationAudioPlayer);
+      } catch (error) {
+        console.warn(
+          "[audio] Nao foi possivel tocar o audio do card:",
+          error
+        );
+      }
+    }
+
+    if (!matchingSelection || matchingSelection.side === side) {
+      setMatchingSelection({ side, ...option });
+      return;
+    }
+
+    const leftOption = side === "translation" ? option : matchingSelection;
+    const rightOption = side === "english" ? option : matchingSelection;
+    const isCorrectPair = leftOption.cardId === rightOption.cardId;
+
+    setMatchingSelection(null);
+
+    if (!isCorrectPair) {
+      if (vibrationEnabled) {
+        Vibration.vibrate(500);
+      }
+
+      const nextWrongPair = {
+        englishId: rightOption.cardId,
+        translationId: leftOption.cardId,
+      };
+      setWrongMatchingPair(nextWrongPair);
+      setAnswerStats((currentStats) => ({
+        ...currentStats,
+        wrong: currentStats.wrong + 1,
+      }));
+
+      const completeResult = await completeCurrentExercise({
+        answer: {
+          english_card_id: rightOption.cardId,
+          translation_card_id: leftOption.cardId,
+        },
+        is_correct: false,
+      });
+      const nextPoints = await spendPoint();
+
+      if (completeResult === null || nextPoints === null) {
+        setWrongMatchingPair(null);
+        return;
+      }
+
+      if (nextPoints <= 0) {
+        setIsNoPointsModalVisible(true);
+      }
+
+      nextExerciseTimeout.current = setTimeout(() => {
+        setWrongMatchingPair(null);
+      }, 550);
+      return;
+    }
+
+    const nextMatchedPairIds = [...matchedPairIds, option.cardId];
+    setMatchedPairIds(nextMatchedPairIds);
+    if (soundEnabled) {
+      playAudio(correctSoundPlayer);
+    }
+
+    if (nextMatchedPairIds.length < matchingColumns.english.length) {
+      return;
+    }
+
+    clearTimeout(nextExerciseTimeout.current);
+    const completeResult = await completeCurrentExercise({
+      answer: { matched_card_ids: nextMatchedPairIds },
+      is_correct: true,
+    });
+    const nextPoints = await spendPoint();
+
+    if (completeResult === null || nextPoints === null) {
+      setMatchedPairIds(matchedPairIds);
+      return;
+    }
+
+    nextExerciseTimeout.current = setTimeout(() => {
+      goToNextExercise(completeResult, true);
+    }, 700);
+  }
 
   async function handleOptionPress(optionCard) {
     if (
@@ -1060,6 +1213,9 @@ export default function CategoryModuleScreen({
         total: playableExercises.length,
         wrong: nextStats.wrong,
       });
+      if (soundEnabled) {
+        playAudio(celebrationSoundPlayer);
+      }
       setIsSetCompleted(true);
       setSelectedExerciseIndex(0);
       return;
@@ -1128,8 +1284,61 @@ export default function CategoryModuleScreen({
     }).start();
   }, [progressAnimation, progressPercent]);
 
+  const completionDurationMs = completionStats?.durationMs ?? 0;
+  const completionTotal = completionStats?.total ?? playableExercises.length;
+  const completionCorrect = completionStats?.correct ?? answerStats.correct;
+  const completionWrong = completionStats?.wrong ?? answerStats.wrong;
+
+  useEffect(() => {
+    if (!isSetCompleted) {
+      return;
+    }
+
+    let animationFrameId;
+    const startedAt = Date.now();
+
+    setAnimatedCompletionStats({
+      correct: 0,
+      durationMs: 0,
+      total: 0,
+      wrong: 0,
+    });
+
+    function updateCountUp() {
+      const progress = Math.min(
+        (Date.now() - startedAt) / COMPLETION_COUNT_UP_DURATION_MS,
+        1
+      );
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+      setAnimatedCompletionStats({
+        correct: Math.round(completionCorrect * easedProgress),
+        durationMs: Math.round(completionDurationMs * easedProgress),
+        total: Math.round(completionTotal * easedProgress),
+        wrong: Math.round(completionWrong * easedProgress),
+      });
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(updateCountUp);
+      }
+    }
+
+    animationFrameId = requestAnimationFrame(updateCountUp);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [
+    completionCorrect,
+    completionDurationMs,
+    completionTotal,
+    completionWrong,
+    isSetCompleted,
+  ]);
+
   return (
-    <ScreenContainer contentStyle={styles.container}>
+    <ScreenContainer
+      contentStyle={styles.container}
+      scroll={exerciseType === EXERCISE_TYPES.MATCHING_PAIRS}
+    >
       {isSetCompleted ? (
         <View style={styles.card}>
           <Text style={styles.moduleName}>Parabéns!</Text>
@@ -1140,25 +1349,25 @@ export default function CategoryModuleScreen({
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Tempo</Text>
               <Text style={styles.summaryValue}>
-                {formatDuration(completionStats?.durationMs ?? 0)}
+                {formatDuration(animatedCompletionStats.durationMs)}
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Total</Text>
               <Text style={styles.summaryValue}>
-                {completionStats?.total ?? playableExercises.length}
+                {animatedCompletionStats.total}
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Certas</Text>
               <Text style={[styles.summaryValue, styles.summaryValueSuccess]}>
-                {completionStats?.correct ?? answerStats.correct}
+                {animatedCompletionStats.correct}
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Erradas</Text>
               <Text style={[styles.summaryValue, styles.summaryValueError]}>
-                {completionStats?.wrong ?? answerStats.wrong}
+                {animatedCompletionStats.wrong}
               </Text>
             </View>
           </View>
@@ -1216,6 +1425,7 @@ export default function CategoryModuleScreen({
         {translationText &&
         exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION &&
         exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH &&
+        exerciseType !== EXERCISE_TYPES.MATCHING_PAIRS &&
         !isWrittenAnswerExerciseType(exerciseType) ? (
           <Text style={styles.titleTranslationText}>{translationText}</Text>
         ) : null}
@@ -1243,6 +1453,85 @@ export default function CategoryModuleScreen({
           <Text style={styles.helperText}>
             Nenhum exercicio compativel encontrado.
           </Text>
+        ) : exerciseType === EXERCISE_TYPES.MATCHING_PAIRS ? (
+          <View style={styles.matchingContent}>
+            <Text style={styles.matchingHint}>
+              Toque em um item de cada coluna para formar os pares.
+            </Text>
+            <View style={styles.matchingColumns}>
+              <View style={styles.matchingColumn}>
+                {matchingColumns.translations.map((option) => {
+                  const isMatched = matchedPairIds.includes(option.cardId);
+                  const isSelected =
+                    matchingSelection?.side === "translation" &&
+                    matchingSelection.cardId === option.cardId;
+                  const isWrong =
+                    wrongMatchingPair?.translationId === option.cardId;
+
+                  return (
+                    <Pressable
+                      accessibilityState={{ disabled: isMatched, selected: isSelected }}
+                      disabled={isMatched || isSpendingPoint}
+                      key={`translation-${option.cardId}`}
+                      style={({ pressed }) => [
+                        styles.matchingItem,
+                        isSelected ? styles.matchingItemSelected : null,
+                        isMatched ? styles.matchingItemCorrect : null,
+                        isWrong ? styles.matchingItemWrong : null,
+                        pressed && !isMatched ? styles.optionItemPressed : null,
+                      ]}
+                      onPress={() =>
+                        handleMatchingOptionPress("translation", option)
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.matchingItemText,
+                          isMatched ? styles.matchingItemTextCorrect : null,
+                        ]}
+                      >
+                        {option.text}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View style={styles.matchingColumn}>
+                {matchingColumns.english.map((option) => {
+                  const isMatched = matchedPairIds.includes(option.cardId);
+                  const isSelected =
+                    matchingSelection?.side === "english" &&
+                    matchingSelection.cardId === option.cardId;
+                  const isWrong = wrongMatchingPair?.englishId === option.cardId;
+
+                  return (
+                    <Pressable
+                      accessibilityState={{ disabled: isMatched, selected: isSelected }}
+                      disabled={isMatched || isSpendingPoint}
+                      key={`english-${option.cardId}`}
+                      style={({ pressed }) => [
+                        styles.matchingItem,
+                        isSelected ? styles.matchingItemSelected : null,
+                        isMatched ? styles.matchingItemCorrect : null,
+                        isWrong ? styles.matchingItemWrong : null,
+                        pressed && !isMatched ? styles.optionItemPressed : null,
+                      ]}
+                      onPress={() => handleMatchingOptionPress("english", option)}
+                    >
+                      <Text
+                        style={[
+                          styles.matchingItemText,
+                          isMatched ? styles.matchingItemTextCorrect : null,
+                        ]}
+                      >
+                        {option.text}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
         ) : exerciseType === EXERCISE_TYPES.JUST_AUDIO ? (
           <View style={styles.justAudioContent}>
             <Pressable
@@ -1648,6 +1937,7 @@ function isSupportedExercise(exercise) {
 
   return (
     type === EXERCISE_TYPES.JUST_AUDIO ||
+    type === EXERCISE_TYPES.MATCHING_PAIRS ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ||
@@ -1662,6 +1952,13 @@ function getExerciseType(exercise) {
 
   if (type === "JUST_AUDIO") {
     return EXERCISE_TYPES.JUST_AUDIO;
+  }
+
+  if (
+    type === "MATCHING_PAIRS" ||
+    type === "MATCHING-PAIRS"
+  ) {
+    return EXERCISE_TYPES.MATCHING_PAIRS;
   }
 
   if (
@@ -1749,6 +2046,10 @@ function getExerciseTitle(exercise) {
 
   if (type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT) {
     return "Fale em voz alta";
+  }
+
+  if (type === EXERCISE_TYPES.MATCHING_PAIRS) {
+    return "Encontre os pares";
   }
 
   return getPromptText(exercise) || card?.english_name || "";
@@ -1871,6 +2172,20 @@ function getExerciseOptions(exercise) {
       };
     })
     .filter((option) => option.id && option.text);
+}
+
+function getMatchingPairCards(exercise) {
+  const pairCards = Array.isArray(exercise?.pair_card_details)
+    ? exercise.pair_card_details
+    : [];
+
+  return pairCards.filter(
+    (card) =>
+      card?.id &&
+      card?.english_name &&
+      card?.international_name &&
+      card?.is_active !== false
+  );
 }
 
 function isCorrectOption(option, exercise) {
@@ -2192,6 +2507,69 @@ function createStyles(colors, shadows) {
     },
     exerciseBody: {
       flex: 1,
+    },
+    matchingContent: {
+      gap: 14,
+      marginBottom: 18,
+    },
+    matchingHint: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 20,
+      textAlign: "center",
+    },
+    matchingColumns: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+    },
+    matchingColumn: {
+      flex: 1,
+      gap: 10,
+    },
+    matchingColumnTitle: {
+      color: colors.textMutedDark,
+      fontSize: 12,
+      fontWeight: "900",
+      textAlign: "center",
+      textTransform: "uppercase",
+    },
+    matchingItem: {
+      minHeight: 58,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      borderWidth: 2,
+      borderColor: colors.border,
+    },
+    matchingItemSelected: {
+      borderColor: colors.link,
+      backgroundColor: colors.surfaceMuted,
+    },
+    matchingItemCorrect: {
+      borderColor: colors.success,
+      backgroundColor: colors.success,
+      shadowColor: colors.success,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.7,
+      shadowRadius: 10,
+      elevation: 6,
+    },
+    matchingItemWrong: {
+      borderColor: colors.error,
+    },
+    matchingItemText: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "800",
+      textAlign: "center",
+    },
+    matchingItemTextCorrect: {
+      color: colors.surfaceMuted,
     },
     justAudioContent: {
       gap: 16,
