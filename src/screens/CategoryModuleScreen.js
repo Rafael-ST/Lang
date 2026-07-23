@@ -68,6 +68,8 @@ export default function CategoryModuleScreen({
     useState([]);
   const [postponedExerciseIds, setPostponedExerciseIds] = useState([]);
   const [isSetCompleted, setIsSetCompleted] = useState(false);
+  const [pendingSetCompletionExerciseId, setPendingSetCompletionExerciseId] =
+    useState(null);
   const [isJustAudioCorrect, setIsJustAudioCorrect] = useState(false);
   const [typedAnswer, setTypedAnswer] = useState("");
   const [typedAnswerStatus, setTypedAnswerStatus] = useState(null);
@@ -1201,23 +1203,13 @@ export default function CategoryModuleScreen({
     ]);
 
     if (completeResult?.set_completed || pendingExercises.length <= 1) {
-      setCompletedExerciseIds((currentIds) => [
-        ...new Set([...currentIds, completedExerciseId]),
-      ]);
-      setPostponedExerciseIds((currentIds) =>
-        currentIds.filter((id) => id !== completedExerciseId)
-      );
       setCompletionStats({
         correct: nextStats.correct,
         durationMs: Date.now() - (exerciseSetStartedAt.current || Date.now()),
         total: playableExercises.length,
         wrong: nextStats.wrong,
       });
-      if (soundEnabled) {
-        playAudio(celebrationSoundPlayer);
-      }
-      setIsSetCompleted(true);
-      setSelectedExerciseIndex(0);
+      setPendingSetCompletionExerciseId(completedExerciseId);
       return;
     }
 
@@ -1276,13 +1268,45 @@ export default function CategoryModuleScreen({
   });
 
   useEffect(() => {
-    Animated.spring(progressAnimation, {
+    const animation = Animated.spring(progressAnimation, {
       toValue: progressPercent,
       friction: 9,
       tension: 70,
       useNativeDriver: false,
-    }).start();
-  }, [progressAnimation, progressPercent]);
+    });
+
+    animation.start(({ finished }) => {
+      if (
+        !finished ||
+        pendingSetCompletionExerciseId === null ||
+        progressPercent < 100
+      ) {
+        return;
+      }
+
+      setCompletedExerciseIds((currentIds) => [
+        ...new Set([...currentIds, pendingSetCompletionExerciseId]),
+      ]);
+      setPostponedExerciseIds((currentIds) =>
+        currentIds.filter((id) => id !== pendingSetCompletionExerciseId)
+      );
+
+      if (soundEnabled) {
+        playAudio(celebrationSoundPlayer);
+      }
+
+      setPendingSetCompletionExerciseId(null);
+      setIsSetCompleted(true);
+    });
+
+    return () => animation.stop();
+  }, [
+    celebrationSoundPlayer,
+    pendingSetCompletionExerciseId,
+    progressAnimation,
+    progressPercent,
+    soundEnabled,
+  ]);
 
   const completionDurationMs = completionStats?.durationMs ?? 0;
   const completionTotal = completionStats?.total ?? playableExercises.length;
