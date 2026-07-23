@@ -26,3 +26,9 @@ export function updateCurrentUser({ firstName, lastName }) {
     }),
   });
 }
+
+export function deleteCurrentUser() {
+  return apiRequest("/usuarios/me/", {
+    method: "DELETE",
+  });
+}

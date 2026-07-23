@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import AppButton from "../components/AppButton";
 import AppTextField from "../components/AppTextField";
 import ScreenContainer from "../components/ScreenContainer";
 import {
+  deleteCurrentUser,
   fetchCurrentUser,
   updateCurrentUser,
 } from "../features/users/services/usersApi";
+import { useAuth } from "../features/auth/context/AuthContext";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
 import { useTheme } from "../theme";
 
 export default function ProfileScreen({ onUserChange }) {
+  const { signOut } = useAuth();
   const { colors, shadows } = useTheme();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -19,6 +22,7 @@ export default function ProfileScreen({ onUserChange }) {
   const [averageExerciseSetTimeMs, setAverageExerciseSetTimeMs] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const styles = createStyles(colors, shadows);
@@ -66,6 +70,34 @@ export default function ProfileScreen({ onUserChange }) {
     }
   }
 
+  function handleDeleteAccountPress() {
+    Alert.alert(
+      "Encerrar conta?",
+      "Esta ação é permanente. Seu perfil, progresso, respostas e demais dados da conta serão apagados.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Encerrar conta",
+          style: "destructive",
+          onPress: handleDeleteAccount,
+        },
+      ]
+    );
+  }
+
+  async function handleDeleteAccount() {
+    try {
+      setIsDeleting(true);
+      setMessage("");
+      await deleteCurrentUser();
+      await signOut();
+    } catch (error) {
+      setIsError(true);
+      setMessage(error.message);
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <ScreenContainer keyboard contentStyle={styles.container}>
       <View style={styles.header}>
@@ -91,6 +123,25 @@ export default function ProfileScreen({ onUserChange }) {
         />
         {message ? <Text style={[styles.message, isError ? styles.error : styles.success]}>{message}</Text> : null}
       </View>
+      <View style={styles.dangerCard}>
+        <Text style={styles.dangerTitle}>Encerrar conta</Text>
+        <Text style={styles.dangerDescription}>
+          Apaga permanentemente seu perfil, progresso e histórico de exercícios.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={isDeleting}
+          onPress={handleDeleteAccountPress}
+          style={({ pressed }) => [
+            styles.deleteButton,
+            (pressed || isDeleting) && styles.deleteButtonPressed,
+          ]}
+        >
+          <Text style={styles.deleteButtonText}>
+            {isDeleting ? "Encerrando conta..." : "Encerrar minha conta"}
+          </Text>
+        </Pressable>
+      </View>
     </ScreenContainer>
   );
 }
@@ -109,6 +160,40 @@ function createStyles(colors, shadows) {
     message: { marginTop: 14, textAlign: "center", fontSize: 14, fontWeight: "700" },
     error: { color: colors.error },
     success: { color: colors.success },
+    dangerCard: {
+      marginTop: 24,
+      padding: 24,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.error,
+      backgroundColor: colors.surfaceMuted,
+    },
+    dangerTitle: {
+      color: colors.error,
+      fontSize: 18,
+      fontWeight: "900",
+      marginBottom: 8,
+    },
+    dangerDescription: {
+      color: colors.textMutedDark,
+      fontSize: 14,
+      lineHeight: 20,
+      marginBottom: 18,
+    },
+    deleteButton: {
+      minHeight: 52,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 18,
+      borderRadius: 16,
+      backgroundColor: colors.error,
+    },
+    deleteButtonPressed: { opacity: 0.65 },
+    deleteButtonText: {
+      color: colors.surfaceMuted,
+      fontSize: 15,
+      fontWeight: "900",
+    },
   });
 }
 
