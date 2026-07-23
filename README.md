@@ -2,6 +2,13 @@
 
 Aplicativo React Native com Expo para aprendizagem de idiomas por niveis, subniveis, conjuntos de exercicios e exercicios tipados.
 
+
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+
+npm.cmd run android
+
+
 ## Como rodar
 
 1. Instale as dependencias com `npm install`

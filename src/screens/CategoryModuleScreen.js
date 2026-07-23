@@ -28,6 +28,7 @@ import {
   fetchProfileByUsername,
   updateProfilePoints,
 } from "../features/profiles/services/profilesApi";
+import { showCompletionInterstitial } from "../services/interstitialAd";
 import { useTheme } from "../theme";
 
 const EXERCISE_TYPES = {
@@ -68,6 +69,7 @@ export default function CategoryModuleScreen({
     useState([]);
   const [postponedExerciseIds, setPostponedExerciseIds] = useState([]);
   const [isSetCompleted, setIsSetCompleted] = useState(false);
+  const [isLeavingCompletion, setIsLeavingCompletion] = useState(false);
   const [pendingSetCompletionExerciseId, setPendingSetCompletionExerciseId] =
     useState(null);
   const [isJustAudioCorrect, setIsJustAudioCorrect] = useState(false);
@@ -134,6 +136,9 @@ export default function CategoryModuleScreen({
     [completedExerciseIds, playableExercises, postponedExerciseIds]
   );
   const selectedExercise = pendingExercises[selectedExerciseIndex];
+  const isRetryingExercise = postponedExerciseIds.includes(
+    selectedExercise?.id
+  );
   const selectedCard = getExerciseCard(selectedExercise);
   const exerciseType = getExerciseType(selectedExercise);
   const moduleName =
@@ -1252,6 +1257,20 @@ export default function CategoryModuleScreen({
     onBack?.();
   }
 
+  async function handleCompletionContinuePress() {
+    if (isLeavingCompletion) {
+      return;
+    }
+
+    setIsLeavingCompletion(true);
+
+    try {
+      await showCompletionInterstitial();
+    } finally {
+      onBack?.();
+    }
+  }
+
   const shouldShowOnlyNoPointsModal = Boolean(
     isNoPointsModalVisible && hasNoPoints
   );
@@ -1395,8 +1414,17 @@ export default function CategoryModuleScreen({
               </Text>
             </View>
           </View>
-          <Pressable style={styles.nextButton} onPress={onBack}>
-            <Text style={styles.nextButtonText}>Voltar</Text>
+          <Pressable
+            disabled={isLeavingCompletion}
+            style={[
+              styles.nextButton,
+              isLeavingCompletion ? styles.disabledButton : null,
+            ]}
+            onPress={handleCompletionContinuePress}
+          >
+            <Text style={styles.nextButtonText}>
+              {isLeavingCompletion ? "Continuando..." : "Continuar"}
+            </Text>
           </Pressable>
         </View>
       ) : isProfilePending ? (
@@ -1431,6 +1459,27 @@ export default function CategoryModuleScreen({
             </Animated.View>
           </View>
         </View>
+        {isRetryingExercise ? (
+          <View accessibilityRole="alert" style={styles.retryMessage}>
+            <Ionicons
+              color={colors.error}
+              name="refresh-circle"
+              size={22}
+            />
+            <View style={styles.retryMessageContent}>
+              <Text style={styles.retryMessageTitle}>
+                Vamos tentar de novo!
+              </Text>
+              <Text style={styles.retryMessageText}>
+                Esta é uma nova chance. Você consegue!
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        {exerciseType ===
+        EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO ? (
+          <Text style={styles.exerciseInstruction}>Escreva a tradução</Text>
+        ) : null}
         {exerciseType === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ? null :
         isEnglishExerciseTitle(exerciseType) ? (
           <ClickableEnglishText
@@ -2478,6 +2527,42 @@ function createStyles(colors, shadows) {
     progressGradient: {
       ...StyleSheet.absoluteFillObject,
       borderRadius: 999,
+    },
+    retryMessage: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 14,
+      backgroundColor: `${colors.error}14`,
+      borderWidth: 1,
+      borderColor: `${colors.error}55`,
+    },
+    retryMessageContent: {
+      flex: 1,
+    },
+    retryMessageTitle: {
+      color: colors.error,
+      fontSize: 14,
+      fontWeight: "900",
+    },
+    retryMessageText: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+      lineHeight: 17,
+    },
+    exerciseInstruction: {
+      color: colors.textMutedDark,
+      fontSize: 14,
+      fontWeight: "800",
+      textAlign: "center",
+      marginTop: 4,
+      marginBottom: -10,
     },
     moduleName: {
       color: colors.textPrimary,
