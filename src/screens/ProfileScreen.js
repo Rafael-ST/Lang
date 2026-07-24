@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import AppButton from "../components/AppButton";
@@ -20,12 +21,16 @@ export default function ProfileScreen({ onUserChange }) {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [averageExerciseSetTimeMs, setAverageExerciseSetTimeMs] = useState(null);
+  const [learnedWordsCount, setLearnedWordsCount] = useState(0);
+  const [completedExercisesCount, setCompletedExercisesCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const styles = createStyles(colors, shadows);
+  const displayName =
+    [firstName, lastName].filter(Boolean).join(" ").trim() || "Usuário";
 
   useEffect(() => {
     fetchCurrentUser()
@@ -35,6 +40,8 @@ export default function ProfileScreen({ onUserChange }) {
         setEmail(data.email || data.username || "");
         const profile = await fetchProfileByUsername(data.username);
         setAverageExerciseSetTimeMs(profile?.average_exercise_set_time_ms ?? null);
+        setLearnedWordsCount(profile?.learned_words_count ?? 0);
+        setCompletedExercisesCount(profile?.completed_exercises_count ?? 0);
       })
       .catch((error) => {
         setIsError(true);
@@ -103,17 +110,71 @@ export default function ProfileScreen({ onUserChange }) {
       <View style={styles.header}>
         <Text style={styles.badge}>Minha conta</Text>
         <Text style={styles.title}>Perfil</Text>
-        <Text style={styles.subtitle}>{email || "Seus dados pessoais"}</Text>
+        <Text style={styles.subtitle}>Seus dados pessoais</Text>
       </View>
-      <View style={styles.card}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Tempo medio por conjunto concluido</Text>
-          <Text style={styles.statValue}>
-            {averageExerciseSetTimeMs == null
-              ? "Sem conjuntos concluidos"
-              : formatDuration(averageExerciseSetTimeMs)}
+      <View style={styles.profileCard}>
+        <View
+          accessibilityLabel="Foto de perfil ainda não cadastrada"
+          style={styles.avatar}
+        >
+          <Ionicons name="person" size={48} color={colors.link} />
+        </View>
+        <Text numberOfLines={1} style={styles.profileName}>
+          {isLoading ? "Carregando..." : displayName}
+        </Text>
+        <View style={styles.profileDetail}>
+          <Ionicons name="mail-outline" size={18} color={colors.textMutedDark} />
+          <Text numberOfLines={1} style={styles.profileDetailText}>
+            {email || "E-mail não informado"}
           </Text>
         </View>
+        <View style={styles.profileDivider} />
+        <View style={styles.profileStat}>
+          <View style={styles.profileStatIcon}>
+            <Ionicons name="time-outline" size={22} color={colors.link} />
+          </View>
+          <View style={styles.profileStatContent}>
+            <Text style={styles.statLabel}>Tempo médio de resposta</Text>
+            <Text style={styles.statValue}>
+              {isLoading
+                ? "Carregando..."
+                : averageExerciseSetTimeMs == null
+                  ? "Sem exercícios concluídos"
+                  : formatDuration(averageExerciseSetTimeMs)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.profileStatDivider} />
+        <View style={styles.profileStat}>
+          <View style={styles.profileStatIcon}>
+            <Ionicons name="book-outline" size={22} color={colors.link} />
+          </View>
+          <View style={styles.profileStatContent}>
+            <Text style={styles.statLabel}>Palavras aprendidas</Text>
+            <Text style={styles.statValue}>
+              {isLoading ? "Carregando..." : learnedWordsCount}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.profileStatDivider} />
+        <View style={styles.profileStat}>
+          <View style={styles.profileStatIcon}>
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={22}
+              color={colors.link}
+            />
+          </View>
+          <View style={styles.profileStatContent}>
+            <Text style={styles.statLabel}>Exercícios concluídos</Text>
+            <Text style={styles.statValue}>
+              {isLoading ? "Carregando..." : completedExercisesCount}
+            </Text>
+          </View>
+        </View>
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.formTitle}>Editar dados</Text>
         <AppTextField label="Nome" placeholder="Seu nome" value={firstName} onChangeText={setFirstName} />
         <AppTextField label="Sobrenome" placeholder="Seu sobrenome" value={lastName} onChangeText={setLastName} />
         <AppButton
@@ -153,10 +214,77 @@ function createStyles(colors, shadows) {
     badge: { alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.badgeBackground, color: colors.badgeText, fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 },
     title: { fontSize: 36, fontWeight: "800", color: colors.textPrimary, marginBottom: 8 },
     subtitle: { fontSize: 16, color: colors.textMutedDark },
-    card: { backgroundColor: colors.surfaceMuted, borderRadius: 28, padding: 24, ...shadows.soft },
-    statCard: { marginBottom: 22, padding: 18, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+    profileCard: {
+      alignItems: "center",
+      padding: 24,
+      borderRadius: 28,
+      backgroundColor: colors.surfaceMuted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.soft,
+    },
+    avatar: {
+      width: 96,
+      height: 96,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+      borderRadius: 48,
+      backgroundColor: colors.surface,
+      borderWidth: 3,
+      borderColor: colors.link,
+    },
+    profileName: {
+      maxWidth: "100%",
+      color: colors.textPrimary,
+      fontSize: 24,
+      fontWeight: "900",
+      textAlign: "center",
+    },
+    profileDetail: {
+      maxWidth: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 8,
+    },
+    profileDetailText: {
+      flexShrink: 1,
+      color: colors.textMutedDark,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    profileDivider: {
+      width: "100%",
+      height: 1,
+      marginVertical: 22,
+      backgroundColor: colors.border,
+    },
+    profileStat: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+    },
+    profileStatIcon: {
+      width: 46,
+      height: 46,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+    },
+    profileStatContent: { flex: 1 },
+    profileStatDivider: {
+      width: "100%",
+      height: 1,
+      marginVertical: 16,
+      backgroundColor: colors.border,
+    },
+    card: { marginTop: 24, backgroundColor: colors.surfaceMuted, borderRadius: 28, padding: 24, ...shadows.soft },
+    formTitle: { color: colors.textPrimary, fontSize: 19, fontWeight: "900", marginBottom: 18 },
     statLabel: { color: colors.textMutedDark, fontSize: 13, fontWeight: "700", marginBottom: 6 },
-    statValue: { color: colors.textPrimary, fontSize: 22, fontWeight: "900" },
+    statValue: { color: colors.textPrimary, fontSize: 19, fontWeight: "900" },
     message: { marginTop: 14, textAlign: "center", fontSize: 14, fontWeight: "700" },
     error: { color: colors.error },
     success: { color: colors.success },

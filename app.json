@@ -7,12 +7,17 @@
       "com.rafael.lang"
     ],
     "android": {
-      "package": "com.rafael.lang"
+      "package": "com.rafael.lang",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/img/capi.png",
+        "backgroundColor": "#f4efe6"
+      }
     },
     "ios": {
       "bundleIdentifier": "com.rafael.lang"
     },
     "version": "1.0.0",
+    "icon": "./assets/img/capi.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
