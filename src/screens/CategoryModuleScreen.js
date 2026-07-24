@@ -36,6 +36,7 @@ const EXERCISE_TYPES = {
   MULTIPLE_CHOICE_TRANSLATION: "multiple_choice_translation",
   MULTIPLE_CHOICE_AUDIO_ENGLISH: "multiple_choice_audio_english",
   MATCHING_PAIRS: "matching_pairs",
+  COMPLETE_AUDIO_TEXT: "complete_audio_text",
   SPEAK_WRITTEN_TEXT: "speak_written_text",
   WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
   WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
@@ -181,6 +182,7 @@ export default function CategoryModuleScreen({
     return translations;
   }, [exercises, selectedCard, translationCards, translationText]);
   const expectedTranscript = getExpectedTranscript(selectedExercise);
+  const clozeTextParts = getClozeTextParts(selectedExercise);
   const visibleWordCardIds = useMemo(() => {
     const visibleTexts = [];
 
@@ -1643,6 +1645,82 @@ export default function CategoryModuleScreen({
               </Text>
             </Pressable>
           </View>
+        ) : exerciseType === EXERCISE_TYPES.COMPLETE_AUDIO_TEXT ? (
+          <View style={styles.writtenAnswerContent}>
+            <Pressable
+              accessibilityLabel={audioUri ? "Ouvir áudio" : "Áudio indisponível"}
+              disabled={!audioUri}
+              style={({ pressed }) => [
+                styles.audioButton,
+                pressed && audioUri ? styles.audioButtonPressed : null,
+                !audioUri ? styles.disabledButton : null,
+              ]}
+              onPress={() => playAudio(exerciseAudioPlayer)}
+            >
+              <Ionicons
+                name="volume-high"
+                size={26}
+                color={colors.textPrimary}
+              />
+            </Pressable>
+
+            <View style={styles.clozeSentence}>
+              {clozeTextParts.before ? (
+                <Text style={styles.clozeText}>{clozeTextParts.before}</Text>
+              ) : null}
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isSpendingPoint && !typedAnswerStatus}
+                onChangeText={setTypedAnswer}
+                onSubmitEditing={handleWrittenAnswerSubmit}
+                placeholder="..."
+                placeholderTextColor={colors.textMuted}
+                returnKeyType="done"
+                style={[
+                  styles.clozeInput,
+                  {
+                    width: Math.min(
+                      160,
+                      Math.max(34, expectedTranscript.length * 13 + 4)
+                    ),
+                  },
+                  typedAnswerStatus === "wrong"
+                    ? styles.answerInputWrong
+                    : null,
+                  typedAnswerStatus === "correct"
+                    ? styles.answerInputCorrect
+                    : null,
+                ]}
+                value={typedAnswer}
+              />
+              {clozeTextParts.after ? (
+                <Text style={styles.clozeText}>{clozeTextParts.after}</Text>
+              ) : null}
+            </View>
+
+            <Pressable
+              disabled={Boolean(
+                !typedAnswer.trim() || isSpendingPoint || typedAnswerStatus
+              )}
+              style={({ pressed }) => [
+                styles.nextButton,
+                typedAnswerStatus === "correct"
+                  ? styles.nextButtonCorrect
+                  : null,
+                typedAnswerStatus === "wrong" ? styles.nextButtonWrong : null,
+                pressed ? styles.nextButtonPressed : null,
+                !typedAnswer.trim() || (isSpendingPoint && !typedAnswerStatus)
+                  ? styles.disabledButton
+                  : null,
+              ]}
+              onPress={handleWrittenAnswerSubmit}
+            >
+              <Text style={styles.nextButtonText}>
+                {isSpendingPoint ? "Verificando..." : "Responder"}
+              </Text>
+            </Pressable>
+          </View>
         ) : isWrittenAnswerExerciseType(exerciseType) ? (
           <View style={styles.writtenAnswerContent}>
             {audioUri ? (
@@ -2035,6 +2113,13 @@ function getExerciseType(exercise) {
   }
 
   if (
+    type === "COMPLETE_AUDIO_TEXT" ||
+    type === "COMPLETE-AUDIO-TEXT"
+  ) {
+    return EXERCISE_TYPES.COMPLETE_AUDIO_TEXT;
+  }
+
+  if (
     type === "MULTIPLE_CHOICE_TRANSLATION" ||
     type === "MULTIPLE-CHOICE-TRANSLATION"
   ) {
@@ -2075,14 +2160,16 @@ function isAudioFirstExerciseType(type) {
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO ||
-    type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO
+    type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO ||
+    type === EXERCISE_TYPES.COMPLETE_AUDIO_TEXT
   );
 }
 
 function isWrittenAnswerExerciseType(type) {
   return (
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO ||
-    type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO
+    type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO ||
+    type === EXERCISE_TYPES.COMPLETE_AUDIO_TEXT
   );
 }
 
@@ -2123,6 +2210,10 @@ function getExerciseTitle(exercise) {
 
   if (type === EXERCISE_TYPES.MATCHING_PAIRS) {
     return "Encontre os pares";
+  }
+
+  if (type === EXERCISE_TYPES.COMPLETE_AUDIO_TEXT) {
+    return "Complete o que ouvir";
   }
 
   return getPromptText(exercise) || card?.english_name || "";
@@ -2358,6 +2449,10 @@ function getAcceptedWrittenAnswers(exercise) {
     acceptedAnswers.push(answerConfig.correct_text);
   }
 
+  if (type === EXERCISE_TYPES.COMPLETE_AUDIO_TEXT) {
+    return [...new Set(acceptedAnswers.filter(Boolean).map(String))];
+  }
+
   if (type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO) {
     if (card?.english_name) {
       acceptedAnswers.push(card.english_name);
@@ -2375,6 +2470,12 @@ function getAcceptedWrittenAnswers(exercise) {
   }
 
   return [...new Set(acceptedAnswers.filter(Boolean).map(String))];
+}
+
+function getClozeTextParts(exercise) {
+  const [before = "", after = ""] = getPromptText(exercise).split("__");
+
+  return { after, before };
 }
 
 function normalizeWrittenAnswer(value, answerConfig) {
@@ -2687,6 +2788,32 @@ function createStyles(colors, shadows) {
     writtenAnswerContent: {
       gap: 14,
       marginBottom: 18,
+    },
+    clozeSentence: {
+      minHeight: 78,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 14,
+    },
+    clozeText: {
+      color: colors.textPrimary,
+      fontSize: 22,
+      fontWeight: "800",
+      lineHeight: 34,
+    },
+    clozeInput: {
+      height: 46,
+      marginHorizontal: 1,
+      paddingHorizontal: 2,
+      borderWidth: 0,
+      backgroundColor: "transparent",
+      color: colors.textPrimary,
+      fontSize: 20,
+      fontWeight: "900",
+      textAlign: "center",
     },
     speechContent: {
       gap: 14,
