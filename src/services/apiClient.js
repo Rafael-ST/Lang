@@ -59,12 +59,14 @@ async function fetchWithAuth(path, options) {
   const fetchOptions = { ...options };
   delete fetchOptions.skipAuth;
   const authorizationHeader = await getAuthorizationHeader(options);
+  const isFormData =
+    typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
 
   return fetch(`${API_BASE_URL}${path}`, {
     ...fetchOptions,
     credentials: fetchOptions.credentials || "include",
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...authorizationHeader,
       ...(options.headers || {}),
     },

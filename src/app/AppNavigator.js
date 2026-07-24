@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import {
   Animated,
+  Alert,
   Pressable,
   StyleSheet,
   Switch,
@@ -26,6 +27,7 @@ import ExerciseSetIntroductionScreen from "../screens/ExerciseSetIntroductionScr
 import CategoryModuleScreen from "../screens/CategoryModuleScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
+import { findNextLearningExerciseSet } from "../features/learning/services/learningResumeService";
 import { useTheme } from "../theme";
 
 const VIBRATION_STORAGE_KEY = "@lang/vibration-enabled";
@@ -46,6 +48,7 @@ export default function AppNavigator() {
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [profile, setProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isResumingLearning, setIsResumingLearning] = useState(false);
   const rotation = useRef(new Animated.Value(0)).current;
   const heartScale = useRef(new Animated.Value(1)).current;
   const previousPoints = useRef(null);
@@ -224,6 +227,42 @@ export default function AppNavigator() {
     }).start();
 
     setIsSettingsOpen(nextIsOpen);
+  }
+
+  async function handleLearningPress() {
+    if (isResumingLearning) {
+      return;
+    }
+
+    setSettingsOpen(false);
+
+    try {
+      setIsResumingLearning(true);
+      const nextLearningItem = await findNextLearningExerciseSet();
+
+      if (!nextLearningItem) {
+        setScreen("levels");
+        Alert.alert(
+          "Trilha concluída",
+          "Você concluiu todos os exercícios disponíveis."
+        );
+        return;
+      }
+
+      setSelectedLevel(nextLearningItem.level);
+      setSelectedSublevel(nextLearningItem.sublevel);
+      setSelectedExerciseSet(null);
+      setSelectedCategory(null);
+      setIsReviewMode(false);
+      setScreen("exercise-sets");
+    } catch {
+      Alert.alert(
+        "Não foi possível continuar",
+        "Verifique sua conexão e tente novamente."
+      );
+    } finally {
+      setIsResumingLearning(false);
+    }
   }
 
   if (isLoading) {
@@ -430,14 +469,29 @@ export default function AppNavigator() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Abrir aprendizado"
+                disabled={isResumingLearning}
                 style={styles.bottomTab}
-                onPress={() => {
-                  setSettingsOpen(false);
-                  setScreen("levels");
-                }}
+                onPress={handleLearningPress}
               >
-                <Ionicons name={screen !== "profile" ? "school" : "school-outline"} size={24} color={screen !== "profile" ? colors.link : colors.textMuted} />
-                <Text style={[styles.bottomTabText, screen !== "profile" && styles.bottomTabTextActive]}>Aprender</Text>
+                <Ionicons
+                  name={
+                    isResumingLearning
+                      ? "hourglass-outline"
+                      : screen !== "profile"
+                        ? "school"
+                        : "school-outline"
+                  }
+                  size={24}
+                  color={screen !== "profile" ? colors.link : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.bottomTabText,
+                    screen !== "profile" && styles.bottomTabTextActive,
+                  ]}
+                >
+                  {isResumingLearning ? "Buscando..." : "Aprender"}
+                </Text>
               </Pressable>
             </View>
           ) : null}

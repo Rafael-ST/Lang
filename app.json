@@ -33,6 +33,13 @@
       "expo-audio",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita que o Lang acesse suas fotos para escolher uma imagem de perfil.",
+          "cameraPermission": false
+        }
+      ],
+      [
         "expo-speech-recognition",
         {
           "microphonePermission": "Permita que o Lang use o microfone para exercicios de fala.",

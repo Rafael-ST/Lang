@@ -32,3 +32,23 @@ export function deleteCurrentUser() {
     method: "DELETE",
   });
 }
+
+export function uploadCurrentUserPhoto(asset) {
+  const formData = new FormData();
+  formData.append("photo", {
+    uri: asset.uri,
+    name: asset.fileName || "profile-photo.jpg",
+    type: asset.mimeType || "image/jpeg",
+  });
+
+  return apiRequest("/usuarios/me/photo/", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function deleteCurrentUserPhoto() {
+  return apiRequest("/usuarios/me/photo/", {
+    method: "DELETE",
+  });
+}

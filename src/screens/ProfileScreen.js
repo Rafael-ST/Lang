@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import AppButton from "../components/AppButton";
 import AppTextField from "../components/AppTextField";
 import ScreenContainer from "../components/ScreenContainer";
 import {
   deleteCurrentUser,
+  deleteCurrentUserPhoto,
   fetchCurrentUser,
   updateCurrentUser,
+  uploadCurrentUserPhoto,
 } from "../features/users/services/usersApi";
 import { useAuth } from "../features/auth/context/AuthContext";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
@@ -23,9 +26,11 @@ export default function ProfileScreen({ onUserChange }) {
   const [averageExerciseSetTimeMs, setAverageExerciseSetTimeMs] = useState(null);
   const [learnedWordsCount, setLearnedWordsCount] = useState(0);
   const [completedExercisesCount, setCompletedExercisesCount] = useState(0);
+  const [profilePictureUrl, setProfilePictureUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const styles = createStyles(colors, shadows);
@@ -38,6 +43,7 @@ export default function ProfileScreen({ onUserChange }) {
         setFirstName(data.first_name || "");
         setLastName(data.last_name || "");
         setEmail(data.email || data.username || "");
+        setProfilePictureUrl(data.profile_picture_url || "");
         const profile = await fetchProfileByUsername(data.username);
         setAverageExerciseSetTimeMs(profile?.average_exercise_set_time_ms ?? null);
         setLearnedWordsCount(profile?.learned_words_count ?? 0);
@@ -77,6 +83,90 @@ export default function ProfileScreen({ onUserChange }) {
     }
   }
 
+  async function handleChoosePhoto() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      setIsError(true);
+      setMessage("Permita o acesso às fotos para escolher uma imagem.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets?.[0]) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+      setIsError(true);
+      setMessage("A imagem deve ter no máximo 5 MB.");
+      return;
+    }
+
+    if (
+      asset.mimeType &&
+      !["image/jpeg", "image/png", "image/webp"].includes(asset.mimeType)
+    ) {
+      setIsError(true);
+      setMessage("Escolha uma imagem JPEG, PNG ou WebP.");
+      return;
+    }
+
+    try {
+      setIsUpdatingPhoto(true);
+      setMessage("");
+      const updated = await uploadCurrentUserPhoto(asset);
+      setProfilePictureUrl(updated.profile_picture_url || "");
+      await onUserChange?.(updated);
+      setIsError(false);
+      setMessage("Foto atualizada com sucesso.");
+    } catch (error) {
+      setIsError(true);
+      setMessage(error.message);
+    } finally {
+      setIsUpdatingPhoto(false);
+    }
+  }
+
+  function handleRemovePhotoPress() {
+    Alert.alert(
+      "Remover foto?",
+      "O ícone padrão voltará a ser exibido no seu perfil.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: handleRemovePhoto,
+        },
+      ]
+    );
+  }
+
+  async function handleRemovePhoto() {
+    try {
+      setIsUpdatingPhoto(true);
+      setMessage("");
+      const updated = await deleteCurrentUserPhoto();
+      setProfilePictureUrl("");
+      await onUserChange?.(updated);
+      setIsError(false);
+      setMessage("Foto removida com sucesso.");
+    } catch (error) {
+      setIsError(true);
+      setMessage(error.message);
+    } finally {
+      setIsUpdatingPhoto(false);
+    }
+  }
+
   function handleDeleteAccountPress() {
     Alert.alert(
       "Encerrar conta?",
@@ -113,12 +203,47 @@ export default function ProfileScreen({ onUserChange }) {
         <Text style={styles.subtitle}>Seus dados pessoais</Text>
       </View>
       <View style={styles.profileCard}>
-        <View
-          accessibilityLabel="Foto de perfil ainda não cadastrada"
-          style={styles.avatar}
+        <Pressable
+          accessibilityLabel={
+            profilePictureUrl ? "Alterar foto do perfil" : "Adicionar foto ao perfil"
+          }
+          accessibilityRole="button"
+          disabled={isLoading || isUpdatingPhoto}
+          style={({ pressed }) => [
+            styles.avatar,
+            (pressed || isUpdatingPhoto) && styles.avatarPressed,
+          ]}
+          onPress={handleChoosePhoto}
         >
-          <Ionicons name="person" size={48} color={colors.link} />
-        </View>
+          {profilePictureUrl ? (
+            <Image
+              accessibilityIgnoresInvertColors
+              source={{ uri: profilePictureUrl }}
+              style={styles.avatarImage}
+            />
+          ) : (
+            <Ionicons name="person" size={48} color={colors.link} />
+          )}
+          <View style={styles.avatarAction}>
+            <Ionicons
+              name={isUpdatingPhoto ? "hourglass-outline" : "camera"}
+              size={16}
+              color={colors.surfaceMuted}
+            />
+          </View>
+        </Pressable>
+        <Text style={styles.photoHint}>
+          {isUpdatingPhoto ? "Enviando foto..." : "Toque para alterar a foto"}
+        </Text>
+        {profilePictureUrl ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={isUpdatingPhoto}
+            onPress={handleRemovePhotoPress}
+          >
+            <Text style={styles.removePhotoText}>Remover foto</Text>
+          </Pressable>
+        ) : null}
         <Text numberOfLines={1} style={styles.profileName}>
           {isLoading ? "Carregando..." : displayName}
         </Text>
@@ -233,6 +358,39 @@ function createStyles(colors, shadows) {
       backgroundColor: colors.surface,
       borderWidth: 3,
       borderColor: colors.link,
+      overflow: "visible",
+    },
+    avatarPressed: { opacity: 0.7 },
+    avatarImage: {
+      width: "100%",
+      height: "100%",
+      borderRadius: 48,
+    },
+    avatarAction: {
+      position: "absolute",
+      right: -2,
+      bottom: -2,
+      width: 30,
+      height: 30,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 15,
+      backgroundColor: colors.link,
+      borderWidth: 2,
+      borderColor: colors.surfaceMuted,
+    },
+    photoHint: {
+      marginTop: -7,
+      marginBottom: 3,
+      color: colors.textMutedDark,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    removePhotoText: {
+      marginBottom: 12,
+      color: colors.error,
+      fontSize: 12,
+      fontWeight: "800",
     },
     profileName: {
       maxWidth: "100%",
