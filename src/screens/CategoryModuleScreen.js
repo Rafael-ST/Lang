@@ -1,5 +1,6 @@
 import {
   Animated,
+  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -37,6 +38,7 @@ const EXERCISE_TYPES = {
   MULTIPLE_CHOICE_AUDIO_ENGLISH: "multiple_choice_audio_english",
   MATCHING_PAIRS: "matching_pairs",
   COMPLETE_AUDIO_TEXT: "complete_audio_text",
+  IMAGE_PRESENTATION: "image_presentation",
   SPEAK_WRITTEN_TEXT: "speak_written_text",
   WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
   WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
@@ -219,6 +221,7 @@ export default function CategoryModuleScreen({
     wordTranslations,
   ]);
   const audioUri = getAudioUri(selectedExercise);
+  const imageUri = getCardImageUri(selectedCard);
   const username = user?.username || user?.email;
   const isProfilePending = Boolean(username && !profile && !pointsError);
   const hasNoPoints = Boolean(profile && profile.pontos <= 0);
@@ -1607,6 +1610,53 @@ export default function CategoryModuleScreen({
               </View>
             </View>
           </View>
+        ) : exerciseType === EXERCISE_TYPES.IMAGE_PRESENTATION ? (
+          <View style={styles.imagePresentationContent}>
+            {imageUri ? (
+              <Image
+                accessibilityLabel={`Imagem de ${moduleName}`}
+                resizeMode="contain"
+                source={{ uri: imageUri }}
+                style={styles.presentationImage}
+              />
+            ) : (
+              <Text style={styles.errorText}>Imagem indisponível.</Text>
+            )}
+
+            <Pressable
+              accessibilityLabel={audioUri ? "Ouvir áudio" : "Áudio indisponível"}
+              disabled={!audioUri}
+              style={({ pressed }) => [
+                styles.audioButton,
+                pressed && audioUri ? styles.audioButtonPressed : null,
+                !audioUri ? styles.disabledButton : null,
+              ]}
+              onPress={() => playAudio(exerciseAudioPlayer)}
+            >
+              <Ionicons
+                name="volume-high"
+                size={26}
+                color={colors.textPrimary}
+              />
+            </Pressable>
+
+            <Pressable
+              disabled={isSpendingPoint}
+              style={({ pressed }) => [
+                styles.nextButton,
+                isJustAudioCorrect ? styles.nextButtonCorrect : null,
+                pressed ? styles.nextButtonPressed : null,
+                isSpendingPoint && !isJustAudioCorrect
+                  ? styles.disabledButton
+                  : null,
+              ]}
+              onPress={handleJustAudioNextPress}
+            >
+              <Text style={styles.nextButtonText}>
+                {isSpendingPoint ? "Avançando..." : "Próximo"}
+              </Text>
+            </Pressable>
+          </View>
         ) : exerciseType === EXERCISE_TYPES.JUST_AUDIO ? (
           <View style={styles.justAudioContent}>
             <Pressable
@@ -2089,6 +2139,7 @@ function isSupportedExercise(exercise) {
   return (
     type === EXERCISE_TYPES.JUST_AUDIO ||
     type === EXERCISE_TYPES.MATCHING_PAIRS ||
+    type === EXERCISE_TYPES.IMAGE_PRESENTATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ||
@@ -2110,6 +2161,13 @@ function getExerciseType(exercise) {
     type === "MATCHING-PAIRS"
   ) {
     return EXERCISE_TYPES.MATCHING_PAIRS;
+  }
+
+  if (
+    type === "IMAGE_PRESENTATION" ||
+    type === "IMAGE-PRESENTATION"
+  ) {
+    return EXERCISE_TYPES.IMAGE_PRESENTATION;
   }
 
   if (
@@ -2159,6 +2217,7 @@ function isAudioFirstExerciseType(type) {
     type === EXERCISE_TYPES.JUST_AUDIO ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
+    type === EXERCISE_TYPES.IMAGE_PRESENTATION ||
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO ||
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO ||
     type === EXERCISE_TYPES.COMPLETE_AUDIO_TEXT
@@ -2266,6 +2325,10 @@ function getAudioUri(exercise) {
 
 function getCardAudioUri(card) {
   return replaceLocalhostOrigin(card?.audio_url || card?.audio || "");
+}
+
+function getCardImageUri(card) {
+  return replaceLocalhostOrigin(card?.image_url || card?.image || "");
 }
 
 function getExpectedTranscript(exercise) {
@@ -2717,6 +2780,16 @@ function createStyles(colors, shadows) {
     },
     exerciseBody: {
       flex: 1,
+    },
+    imagePresentationContent: {
+      gap: 14,
+      marginBottom: 18,
+    },
+    presentationImage: {
+      width: "100%",
+      height: 230,
+      borderRadius: 18,
+      backgroundColor: colors.surface,
     },
     matchingContent: {
       gap: 14,
