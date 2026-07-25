@@ -39,6 +39,7 @@ const EXERCISE_TYPES = {
   MATCHING_PAIRS: "matching_pairs",
   COMPLETE_AUDIO_TEXT: "complete_audio_text",
   IMAGE_PRESENTATION: "image_presentation",
+  IMAGE_MULTIPLE_CHOICE_ENGLISH: "image_multiple_choice_english",
   SPEAK_WRITTEN_TEXT: "speak_written_text",
   WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
   WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
@@ -263,7 +264,8 @@ export default function CategoryModuleScreen({
   const optionCards = useMemo(() => {
     if (
       exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION &&
-      exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH
+      exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH &&
+      exerciseType !== EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH
     ) {
       return [];
     }
@@ -275,7 +277,8 @@ export default function CategoryModuleScreen({
     }
 
     const useEnglishOptions =
-      exerciseType === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH;
+      exerciseType === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
+      exerciseType === EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH;
     const selectedOptionText = useEnglishOptions
       ? selectedCard?.english_name
       : selectedCard?.international_name;
@@ -743,6 +746,25 @@ export default function CategoryModuleScreen({
       return;
     }
 
+    if (
+      exerciseType === EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH &&
+      soundEnabled
+    ) {
+      const optionAudioUri = getOptionAudioUri(optionCard);
+
+      if (optionAudioUri) {
+        try {
+          translationAudioPlayer.replace({ uri: optionAudioUri });
+          playAudio(translationAudioPlayer);
+        } catch (error) {
+          console.warn(
+            "[audio] Nao foi possivel tocar o audio da alternativa:",
+            error
+          );
+        }
+      }
+    }
+
     if (!isCorrectOption(optionCard, selectedExercise)) {
       if (vibrationEnabled) {
         Vibration.vibrate(500);
@@ -783,7 +805,9 @@ export default function CategoryModuleScreen({
 
     setWrongOptionId(null);
     setCorrectOptionId(optionCard.id);
-    playAudio(correctSoundPlayer);
+    if (exerciseType !== EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH) {
+      playAudio(correctSoundPlayer);
+    }
     clearTimeout(nextExerciseTimeout.current);
 
     const completeResult = await completeCurrentExercise({
@@ -1485,7 +1509,8 @@ export default function CategoryModuleScreen({
         EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO ? (
           <Text style={styles.exerciseInstruction}>Escreva a tradução</Text>
         ) : null}
-        {exerciseType === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ? null :
+        {exerciseType === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
+        exerciseType === EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH ? null :
         isEnglishExerciseTitle(exerciseType) ? (
           <ClickableEnglishText
             exerciseId={selectedExercise?.id}
@@ -1503,6 +1528,7 @@ export default function CategoryModuleScreen({
         {translationText &&
         exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION &&
         exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH &&
+        exerciseType !== EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH &&
         exerciseType !== EXERCISE_TYPES.MATCHING_PAIRS &&
         !isWrittenAnswerExerciseType(exerciseType) ? (
           <Text style={styles.titleTranslationText}>{translationText}</Text>
@@ -1931,7 +1957,19 @@ export default function CategoryModuleScreen({
           </View>
         ) : optionCards.length ? (
           <View style={styles.multipleChoiceContent}>
-            {audioUri ? (
+            {exerciseType ===
+              EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH &&
+            imageUri ? (
+              <Image
+                accessibilityLabel="Imagem da pergunta"
+                resizeMode="contain"
+                source={{ uri: imageUri }}
+                style={styles.presentationImage}
+              />
+            ) : null}
+            {audioUri &&
+            exerciseType !==
+              EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH ? (
               <Pressable
                 accessibilityLabel="Repetir audio"
                 style={({ pressed }) => [
@@ -2140,6 +2178,7 @@ function isSupportedExercise(exercise) {
     type === EXERCISE_TYPES.JUST_AUDIO ||
     type === EXERCISE_TYPES.MATCHING_PAIRS ||
     type === EXERCISE_TYPES.IMAGE_PRESENTATION ||
+    type === EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ||
@@ -2161,6 +2200,13 @@ function getExerciseType(exercise) {
     type === "MATCHING-PAIRS"
   ) {
     return EXERCISE_TYPES.MATCHING_PAIRS;
+  }
+
+  if (
+    type === "IMAGE_MULTIPLE_CHOICE_ENGLISH" ||
+    type === "IMAGE-MULTIPLE-CHOICE-ENGLISH"
+  ) {
+    return EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH;
   }
 
   if (
@@ -2396,6 +2442,9 @@ function getExerciseOptions(exercise) {
       return {
         id: option.id || option.card || option.value || option.text,
         text: option.text || option.international_name || option.label,
+        audioUri: replaceLocalhostOrigin(
+          option.audio_url || option.audio || ""
+        ),
       };
     })
     .filter((option) => option.id && option.text);
@@ -2533,6 +2582,12 @@ function getAcceptedWrittenAnswers(exercise) {
   }
 
   return [...new Set(acceptedAnswers.filter(Boolean).map(String))];
+}
+
+function getOptionAudioUri(option) {
+  return replaceLocalhostOrigin(
+    option?.audioUri || option?.audio_url || option?.audio || ""
+  );
 }
 
 function getClozeTextParts(exercise) {
@@ -2753,15 +2808,19 @@ function createStyles(colors, shadows) {
       marginBottom: 20,
     },
     wordTranslationCard: {
-      alignSelf: "center",
-      minWidth: 150,
-      marginBottom: 20,
+      position: "absolute",
+      top: 150,
+      left: 20,
+      right: 20,
+      zIndex: 30,
+      elevation: 30,
       paddingHorizontal: 16,
       paddingVertical: 12,
       borderRadius: 14,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
+      ...shadows.soft,
     },
     wordTranslationLabel: {
       color: colors.textMutedDark,
