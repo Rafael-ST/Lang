@@ -40,6 +40,7 @@ const EXERCISE_TYPES = {
   COMPLETE_AUDIO_TEXT: "complete_audio_text",
   IMAGE_PRESENTATION: "image_presentation",
   IMAGE_MULTIPLE_CHOICE_ENGLISH: "image_multiple_choice_english",
+  AUDIO_MULTIPLE_CHOICE_IMAGES: "audio_multiple_choice_images",
   SPEAK_WRITTEN_TEXT: "speak_written_text",
   WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
   WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
@@ -265,7 +266,8 @@ export default function CategoryModuleScreen({
     if (
       exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION &&
       exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH &&
-      exerciseType !== EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH
+      exerciseType !== EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH &&
+      exerciseType !== EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES
     ) {
       return [];
     }
@@ -278,7 +280,8 @@ export default function CategoryModuleScreen({
 
     const useEnglishOptions =
       exerciseType === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
-      exerciseType === EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH;
+      exerciseType === EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH ||
+      exerciseType === EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES;
     const selectedOptionText = useEnglishOptions
       ? selectedCard?.english_name
       : selectedCard?.international_name;
@@ -1529,6 +1532,7 @@ export default function CategoryModuleScreen({
         exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION &&
         exerciseType !== EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH &&
         exerciseType !== EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH &&
+        exerciseType !== EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES &&
         exerciseType !== EXERCISE_TYPES.MATCHING_PAIRS &&
         !isWrittenAnswerExerciseType(exerciseType) ? (
           <Text style={styles.titleTranslationText}>{translationText}</Text>
@@ -1997,6 +2001,10 @@ export default function CategoryModuleScreen({
                   )}
                   style={({ pressed }) => [
                     styles.optionItem,
+                    exerciseType ===
+                    EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES
+                      ? styles.imageOptionItem
+                      : null,
                     pressed && !correctOptionId && !wrongOptionId
                       ? styles.optionItemPressed
                       : null,
@@ -2005,7 +2013,17 @@ export default function CategoryModuleScreen({
                   ]}
                   onPress={() => handleOptionPress(card)}
                 >
-                  <Text style={styles.optionText}>{card.text}</Text>
+                  {exerciseType ===
+                  EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES ? (
+                    <Image
+                      accessibilityLabel={`Opção ${card.text}`}
+                      resizeMode="cover"
+                      source={{ uri: card.imageUri }}
+                      style={styles.imageOption}
+                    />
+                  ) : (
+                    <Text style={styles.optionText}>{card.text}</Text>
+                  )}
                 </Pressable>
               ))}
             </View>
@@ -2179,6 +2197,7 @@ function isSupportedExercise(exercise) {
     type === EXERCISE_TYPES.MATCHING_PAIRS ||
     type === EXERCISE_TYPES.IMAGE_PRESENTATION ||
     type === EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH ||
+    type === EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ||
@@ -2200,6 +2219,13 @@ function getExerciseType(exercise) {
     type === "MATCHING-PAIRS"
   ) {
     return EXERCISE_TYPES.MATCHING_PAIRS;
+  }
+
+  if (
+    type === "AUDIO_MULTIPLE_CHOICE_IMAGES" ||
+    type === "AUDIO-MULTIPLE-CHOICE-IMAGES"
+  ) {
+    return EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES;
   }
 
   if (
@@ -2264,6 +2290,7 @@ function isAudioFirstExerciseType(type) {
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.IMAGE_PRESENTATION ||
+    type === EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES ||
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO ||
     type === EXERCISE_TYPES.WRITE_TRANSLATION_FROM_TEXT_AUDIO ||
     type === EXERCISE_TYPES.COMPLETE_AUDIO_TEXT
@@ -2444,6 +2471,9 @@ function getExerciseOptions(exercise) {
         text: option.text || option.international_name || option.label,
         audioUri: replaceLocalhostOrigin(
           option.audio_url || option.audio || ""
+        ),
+        imageUri: replaceLocalhostOrigin(
+          option.image_url || option.image || ""
         ),
       };
     })
@@ -3112,6 +3142,16 @@ function createStyles(colors, shadows) {
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
+    },
+    imageOptionItem: {
+      height: 132,
+      paddingHorizontal: 0,
+      overflow: "hidden",
+      borderWidth: 3,
+    },
+    imageOption: {
+      width: "100%",
+      height: "100%",
     },
     optionItemPressed: {
       backgroundColor: colors.surfaceMuted,
