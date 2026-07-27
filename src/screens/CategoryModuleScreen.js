@@ -42,6 +42,7 @@ const EXERCISE_TYPES = {
   IMAGE_MULTIPLE_CHOICE_ENGLISH: "image_multiple_choice_english",
   AUDIO_MULTIPLE_CHOICE_IMAGES: "audio_multiple_choice_images",
   SPEAK_WRITTEN_TEXT: "speak_written_text",
+  SPEAK_ENGLISH_FROM_TRANSLATION: "speak_english_from_translation",
   WRITE_TRANSLATION_FROM_AUDIO: "write_translation_from_audio",
   WRITE_TRANSLATION_FROM_TEXT_AUDIO: "write_translation_from_text_audio",
 };
@@ -1534,20 +1535,11 @@ export default function CategoryModuleScreen({
         exerciseType !== EXERCISE_TYPES.IMAGE_MULTIPLE_CHOICE_ENGLISH &&
         exerciseType !== EXERCISE_TYPES.AUDIO_MULTIPLE_CHOICE_IMAGES &&
         exerciseType !== EXERCISE_TYPES.MATCHING_PAIRS &&
+        exerciseType !== EXERCISE_TYPES.SPEAK_WRITTEN_TEXT &&
+        exerciseType !== EXERCISE_TYPES.SPEAK_ENGLISH_FROM_TRANSLATION &&
         !isWrittenAnswerExerciseType(exerciseType) ? (
           <Text style={styles.titleTranslationText}>{translationText}</Text>
         ) : null}
-        {selectedWordTranslation ? (
-          <View style={styles.wordTranslationCard}>
-            <Text style={styles.wordTranslationLabel}>
-              {selectedWordTranslation.word}
-            </Text>
-            <Text style={styles.wordTranslationText}>
-              {selectedWordTranslation.translation}
-            </Text>
-          </View>
-        ) : null}
-
         <View style={styles.exerciseBody}>
         {isLoadingExercises || isLoadingProfile ? (
           <Text style={styles.helperText}>Carregando exercicios...</Text>
@@ -1860,24 +1852,36 @@ export default function CategoryModuleScreen({
               </Text>
             </Pressable>
           </View>
-        ) : exerciseType === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ? (
+        ) : [
+          EXERCISE_TYPES.SPEAK_WRITTEN_TEXT,
+          EXERCISE_TYPES.SPEAK_ENGLISH_FROM_TRANSLATION,
+        ].includes(exerciseType) ? (
           <View style={styles.speechContent}>
-            <ClickableEnglishText
-              exerciseId={selectedExercise?.id}
-              firstSeenCardExerciseIds={firstSeenCardExerciseIds}
-              firstSeenStyle={styles.firstSeenWord}
-              linkStyle={styles.translatableWord}
-              style={styles.promptText}
-              text={
-                expectedTranscript ||
-                getPromptText(selectedExercise) ||
-                "Texto indisponivel"
-              }
-              translations={wordTranslations}
-              onTranslationSelect={handleTranslationSelect}
-            />
+            {exerciseType === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ? (
+              <ClickableEnglishText
+                exerciseId={selectedExercise?.id}
+                firstSeenCardExerciseIds={firstSeenCardExerciseIds}
+                firstSeenStyle={styles.firstSeenWord}
+                linkStyle={styles.translatableWord}
+                style={styles.promptText}
+                text={
+                  expectedTranscript ||
+                  getPromptText(selectedExercise) ||
+                  "Texto indisponivel"
+                }
+                translations={wordTranslations}
+                onTranslationSelect={handleTranslationSelect}
+              />
+            ) : (
+              <Text style={styles.promptText}>
+                {getPromptText(selectedExercise) ||
+                  selectedCard?.international_name ||
+                  "Texto indisponivel"}
+              </Text>
+            )}
 
-            {audioUri ? (
+            {audioUri &&
+            exerciseType === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ? (
               <Pressable
                 accessibilityLabel="Ouvir modelo"
                 disabled={!audioUri}
@@ -1930,7 +1934,11 @@ export default function CategoryModuleScreen({
               ]}
             >
               {spokenTranscript ||
-                (isListeningSpeech ? "Ouvindo..." : "Toque em Falar e repita o texto.")}
+                (isListeningSpeech
+                  ? "Ouvindo..."
+                  : exerciseType === EXERCISE_TYPES.SPEAK_ENGLISH_FROM_TRANSLATION
+                    ? "Toque em Falar e diga a frase em inglês."
+                    : "Toque em Falar e repita o texto.")}
             </Text>
 
             {speechError ? (
@@ -2044,6 +2052,38 @@ export default function CategoryModuleScreen({
 
       <Modal
         animationType="fade"
+        onRequestClose={() => setSelectedWordTranslation(null)}
+        transparent
+        visible={Boolean(selectedWordTranslation)}
+      >
+        <Pressable
+          accessibilityLabel="Fechar tradução"
+          accessibilityRole="button"
+          style={styles.translationModalBackdrop}
+          onPress={() => setSelectedWordTranslation(null)}
+        >
+          <Pressable
+            style={[
+              styles.wordTranslationCard,
+              {
+                left: Math.max(
+                  12,
+                  Number(selectedWordTranslation?.anchorX || 12) - 20
+                ),
+                top: Number(selectedWordTranslation?.anchorY || 120) + 24,
+              },
+            ]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <Text style={styles.wordTranslationText}>
+              {selectedWordTranslation?.translation}
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        animationType="fade"
         transparent
         visible={isNoPointsModalVisible}
         onRequestClose={handleNoPointsBackPress}
@@ -2151,12 +2191,14 @@ function ClickableEnglishText({
                 ? firstSeenStyle
                 : null,
             ]}
-            onPress={() =>
+            onPress={(event) =>
               onTranslationSelect({
                 audioUri: translationEntry.audioUri,
                 cardId: translationEntry.cardId,
                 word: part,
                 translation: translationEntry.translation,
+                anchorX: event.nativeEvent.pageX,
+                anchorY: event.nativeEvent.pageY,
               })
             }
           >
@@ -2201,6 +2243,7 @@ function isSupportedExercise(exercise) {
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_TRANSLATION ||
     type === EXERCISE_TYPES.MULTIPLE_CHOICE_AUDIO_ENGLISH ||
     type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT ||
+    type === EXERCISE_TYPES.SPEAK_ENGLISH_FROM_TRANSLATION ||
     isWrittenAnswerExerciseType(type)
   );
 }
@@ -2281,6 +2324,13 @@ function getExerciseType(exercise) {
     return EXERCISE_TYPES.SPEAK_WRITTEN_TEXT;
   }
 
+  if (
+    type === "SPEAK_ENGLISH_FROM_TRANSLATION" ||
+    type === "SPEAK-ENGLISH-FROM-TRANSLATION"
+  ) {
+    return EXERCISE_TYPES.SPEAK_ENGLISH_FROM_TRANSLATION;
+  }
+
   return exercise?.type || "";
 }
 
@@ -2308,7 +2358,8 @@ function isWrittenAnswerExerciseType(type) {
 function isEnglishExerciseTitle(type) {
   return (
     type !== EXERCISE_TYPES.WRITE_TRANSLATION_FROM_AUDIO &&
-    type !== EXERCISE_TYPES.SPEAK_WRITTEN_TEXT
+    type !== EXERCISE_TYPES.SPEAK_WRITTEN_TEXT &&
+    type !== EXERCISE_TYPES.SPEAK_ENGLISH_FROM_TRANSLATION
   );
 }
 
@@ -2338,6 +2389,10 @@ function getExerciseTitle(exercise) {
 
   if (type === EXERCISE_TYPES.SPEAK_WRITTEN_TEXT) {
     return "Fale em voz alta";
+  }
+
+  if (type === EXERCISE_TYPES.SPEAK_ENGLISH_FROM_TRANSLATION) {
+    return "Fale em inglês";
   }
 
   if (type === EXERCISE_TYPES.MATCHING_PAIRS) {
@@ -2548,7 +2603,11 @@ function getAcceptedSpokenAnswers(exercise) {
 
   const promptText = getPromptText(exercise);
 
-  if (promptText) {
+  if (
+    promptText &&
+    getExerciseType(exercise) !==
+      EXERCISE_TYPES.SPEAK_ENGLISH_FROM_TRANSLATION
+  ) {
     acceptedAnswers.push(promptText);
   }
 
@@ -2839,32 +2898,24 @@ function createStyles(colors, shadows) {
     },
     wordTranslationCard: {
       position: "absolute",
-      top: 150,
-      left: 20,
-      right: 20,
-      zIndex: 30,
-      elevation: 30,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
+      maxWidth: 520,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
       borderRadius: 14,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
       ...shadows.soft,
     },
-    wordTranslationLabel: {
-      color: colors.textMutedDark,
-      fontSize: 12,
-      fontWeight: "800",
-      textAlign: "center",
-      textTransform: "uppercase",
+    translationModalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.12)",
     },
     wordTranslationText: {
       color: colors.textPrimary,
       fontSize: 18,
       fontWeight: "800",
       lineHeight: 24,
-      marginTop: 3,
       textAlign: "center",
     },
     exerciseBody: {
