@@ -485,9 +485,6 @@ export default function CategoryModuleScreen({
         if (isMounted) {
           const nextExercises = normalizeExerciseList(data);
 
-          console.info("[exercises] Retorno de /exercises/:", data);
-          console.info("[exercises] Exercicios normalizados:", nextExercises);
-
           setExercises(sortExercisesByOrder(nextExercises));
           setSelectedExerciseIndex(0);
           setCompletedExerciseIds([]);
