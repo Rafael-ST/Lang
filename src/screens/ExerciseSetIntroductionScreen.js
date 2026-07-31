@@ -26,11 +26,6 @@ export default function ExerciseSetIntroductionScreen({
         <Text style={styles.title}>
           {exerciseSet?.title || "Conjunto de exercicios"}
         </Text>
-        <Text style={styles.description}>
-          {exerciseSet?.description ||
-            "Prepare-se para praticar o conteudo deste conjunto."}
-        </Text>
-
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [
@@ -88,13 +83,6 @@ function createStyles(colors, shadows) {
       fontSize: 24,
       fontWeight: "800",
       lineHeight: 30,
-      marginBottom: 14,
-    },
-    description: {
-      color: colors.textSecondary,
-      fontSize: 15,
-      fontWeight: "600",
-      lineHeight: 22,
       marginBottom: 28,
     },
     startButton: {

@@ -22,10 +22,13 @@ import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 import LearningLevelsScreen from "../screens/LearningLevelsScreen";
 import SublevelsScreen from "../screens/SublevelsScreen";
+import SublevelIntroductionScreen from "../screens/SublevelIntroductionScreen";
 import ExerciseSetsScreen from "../screens/ExerciseSetsScreen";
 import ExerciseSetIntroductionScreen from "../screens/ExerciseSetIntroductionScreen";
 import CategoryModuleScreen from "../screens/CategoryModuleScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import CardsScreen from "../screens/CardsScreen";
+import CardPracticeScreen from "../screens/CardPracticeScreen";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
 import { findNextLearningExerciseSet } from "../features/learning/services/learningResumeService";
 import { useTheme } from "../theme";
@@ -42,6 +45,7 @@ export default function AppNavigator() {
   const [selectedSublevel, setSelectedSublevel] = useState(null);
   const [selectedExerciseSet, setSelectedExerciseSet] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCardCategory, setSelectedCardCategory] = useState(null);
   const [isReviewMode, setIsReviewMode] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVibrationEnabled, setIsVibrationEnabled] = useState(true);
@@ -212,6 +216,7 @@ export default function AppNavigator() {
     setSelectedSublevel(null);
     setSelectedExerciseSet(null);
     setSelectedCategory(null);
+    setSelectedCardCategory(null);
     setScreen("login");
   }
 
@@ -281,6 +286,26 @@ export default function AppNavigator() {
         <>
           {screen === "profile" ? (
             <ProfileScreen onUserChange={updateAuthenticatedUser} />
+          ) : screen === "cards" ? (
+            <CardsScreen
+              onCategoryPress={(category) => {
+                setSelectedCardCategory(category);
+                setScreen("card-practice");
+              }}
+            />
+          ) : screen === "card-practice" ? (
+            <CardPracticeScreen
+              category={selectedCardCategory}
+              soundEnabled={isSoundEnabled}
+              onBack={() => {
+                setSelectedCardCategory(null);
+                setScreen("cards");
+              }}
+              onComplete={() => {
+                setSelectedCardCategory(null);
+                setScreen("cards");
+              }}
+            />
           ) : screen === "category-module" ? (
             <CategoryModuleScreen
               category={selectedCategory}
@@ -314,7 +339,7 @@ export default function AppNavigator() {
               onBack={() => {
                 setSelectedExerciseSet(null);
                 setIsReviewMode(false);
-                setScreen("sublevels");
+                setScreen("sublevel-introduction");
               }}
               onExerciseSetPress={(exerciseSet, options = {}) => {
                 setSelectedExerciseSet(exerciseSet);
@@ -322,6 +347,15 @@ export default function AppNavigator() {
                 setIsReviewMode(Boolean(options.isReview));
                 setScreen("exercise-set-introduction");
               }}
+            />
+          ) : screen === "sublevel-introduction" ? (
+            <SublevelIntroductionScreen
+              sublevel={selectedSublevel}
+              onBack={() => {
+                setSelectedSublevel(null);
+                setScreen("sublevels");
+              }}
+              onContinue={() => setScreen("exercise-sets")}
             />
           ) : screen === "logged" ? (
             <LoggedScreen
@@ -345,7 +379,7 @@ export default function AppNavigator() {
                 setSelectedSublevel(sublevel);
                 setSelectedExerciseSet(null);
                 setSelectedCategory(null);
-                setScreen("exercise-sets");
+                setScreen("sublevel-introduction");
               }}
             />
           ) : (
@@ -447,7 +481,9 @@ export default function AppNavigator() {
           </View>
 
           {screen !== "category-module" &&
-          screen !== "exercise-set-introduction" ? (
+          screen !== "exercise-set-introduction" &&
+          screen !== "sublevel-introduction" &&
+          screen !== "card-practice" ? (
             <View
               style={[
                 styles.bottomNavigator,
@@ -468,6 +504,30 @@ export default function AppNavigator() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Praticar cards vistos"
+                style={styles.bottomTab}
+                onPress={() => {
+                  setSettingsOpen(false);
+                  setSelectedCardCategory(null);
+                  setScreen("cards");
+                }}
+              >
+                <Ionicons
+                  name={screen === "cards" ? "albums" : "albums-outline"}
+                  size={24}
+                  color={screen === "cards" ? colors.link : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.bottomTabText,
+                    screen === "cards" && styles.bottomTabTextActive,
+                  ]}
+                >
+                  Cards
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
                 accessibilityLabel="Abrir aprendizado"
                 disabled={isResumingLearning}
                 style={styles.bottomTab}
@@ -477,17 +537,23 @@ export default function AppNavigator() {
                   name={
                     isResumingLearning
                       ? "hourglass-outline"
-                      : screen !== "profile"
+                      : screen !== "profile" && screen !== "cards"
                         ? "school"
                         : "school-outline"
                   }
                   size={24}
-                  color={screen !== "profile" ? colors.link : colors.textMuted}
+                  color={
+                    screen !== "profile" && screen !== "cards"
+                      ? colors.link
+                      : colors.textMuted
+                  }
                 />
                 <Text
                   style={[
                     styles.bottomTabText,
-                    screen !== "profile" && styles.bottomTabTextActive,
+                    screen !== "profile" &&
+                      screen !== "cards" &&
+                      styles.bottomTabTextActive,
                   ]}
                 >
                   {isResumingLearning ? "Buscando..." : "Aprender"}

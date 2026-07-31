@@ -8,6 +8,10 @@ export function fetchCardsByCategory(categoryId) {
   return apiRequest(`/cards/?categoria_id=${encodeURIComponent(categoryId)}`);
 }
 
+export function fetchSeenCards() {
+  return apiRequest("/cards/seen/");
+}
+
 export function markCardsAsSeen(cardIds) {
   return apiRequest("/cards/mark-seen/", {
     method: "POST",

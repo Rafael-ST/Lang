@@ -37,6 +37,14 @@ export async function showCompletionInterstitial() {
     return false;
   }
 
+  return showInterstitial();
+}
+
+export async function showPracticeCategoryInterstitial() {
+  return showInterstitial();
+}
+
+async function showInterstitial() {
   const initialized = await initializeAds();
 
   if (!initialized) {
