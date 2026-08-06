@@ -1,4 +1,5 @@
 import {
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -104,6 +105,10 @@ export default function ExerciseSetsScreen({
 
                 return (
                   <Pressable
+                    accessibilityLabel={
+                      exerciseSet.title || "Conjunto sem título"
+                    }
+                    accessibilityRole="button"
                     key={exerciseSet.id}
                     disabled={!canPress}
                     style={({ pressed }) => [
@@ -127,14 +132,22 @@ export default function ExerciseSetsScreen({
                       onExerciseSetPress?.(exerciseSet);
                     }}
                   >
-                    <Text
-                      style={[
-                        styles.exerciseSetTitle,
-                        !canPress ? styles.exerciseSetTitleDisabled : null,
-                      ]}
-                    >
-                      {exerciseSet.title || "Conjunto sem titulo"}
-                    </Text>
+                    {exerciseSet.image_detail?.image ? (
+                      <Image
+                        source={{ uri: exerciseSet.image_detail.image }}
+                        resizeMode="contain"
+                        style={styles.exerciseSetImage}
+                      />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.exerciseSetTitle,
+                          !canPress ? styles.exerciseSetTitleDisabled : null,
+                        ]}
+                      >
+                        {exerciseSet.title || "Conjunto sem titulo"}
+                      </Text>
+                    )}
                     {!isActive ? (
                       <Text style={styles.exerciseSetStatus}>Inativo</Text>
                     ) : isLocked ? (
@@ -308,6 +321,12 @@ function createStyles(colors, shadows) {
       color: colors.textPrimary,
       fontSize: 16,
       fontWeight: "800",
+    },
+    exerciseSetImage: {
+      width: 88,
+      height: 88,
+      alignSelf: "center",
+      borderRadius: 16,
     },
     exerciseSetTitleDisabled: {
       color: colors.textMuted,
