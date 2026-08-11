@@ -3,7 +3,6 @@ import * as Google from "expo-auth-session/providers/google";
 
 import {
   getRefreshToken,
-  hasRefreshToken,
   setApiAuthHandlers,
 } from "../../../services/apiClient";
 import {
@@ -13,6 +12,7 @@ import {
 import {
   authenticateUser,
   authenticateWithGoogle,
+  logoutUser,
 } from "../services/authApi";
 import {
   clearStoredUser,
@@ -103,23 +103,6 @@ export function AuthProvider({ children }) {
           ...(tokenData.usuario || {}),
           token: tokenData,
         };
-        const googleRefreshToken = getRefreshToken(tokenData);
-
-        console.info(
-          "[auth] Login Google - JSON de retorno:",
-          JSON.stringify(profile, null, 2)
-        );
-        console.info(
-          "[auth] Login Google - refresh token:",
-          googleRefreshToken || "(nao retornado)"
-        );
-
-        if (!hasRefreshToken(tokenData)) {
-          throw new Error(
-            "Login Google nao retornou token da API. Use login por senha ou implemente a troca do token Google no backend."
-          );
-        }
-
         setUser(profile);
         await storeUser(profile);
         await scheduleLoginReminder().catch(() => false);
@@ -162,23 +145,6 @@ export function AuthProvider({ children }) {
 
     try {
       const tokenData = await authenticateUser({ username, password });
-      const refreshToken = getRefreshToken(tokenData);
-
-      console.info(
-        "[auth] Login por senha - JSON de retorno:",
-        JSON.stringify(tokenData, null, 2)
-      );
-      console.info(
-        "[auth] Login por senha - refresh token:",
-        refreshToken || "(cookie HttpOnly; nao legivel pelo app)"
-      );
-
-      if (!hasRefreshToken(tokenData)) {
-        console.info(
-          "[auth] Login por senha nao retornou refresh token no JSON. Usando cookie HttpOnly para renovar a sessao."
-        );
-      }
-
       const authenticatedUser = {
         username,
         token: tokenData,
@@ -195,6 +161,7 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
+    await logoutUser(getRefreshToken(user?.token)).catch(() => null);
     setUser(null);
     await clearStoredUser();
     await cancelLoginReminder().catch(() => null);

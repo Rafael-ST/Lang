@@ -18,3 +18,10 @@ export function authenticateWithGoogle(idToken) {
     body: JSON.stringify({ id_token: idToken }),
   });
 }
+
+export function logoutUser(refresh) {
+  return apiRequest("/auth/logout/", {
+    method: "POST",
+    body: JSON.stringify(refresh ? { refresh } : {}),
+  });
+}

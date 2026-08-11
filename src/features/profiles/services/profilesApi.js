@@ -15,9 +15,8 @@ export async function fetchProfileByUsername(username) {
   );
 }
 
-export function updateProfilePoints(profileId, pontos) {
-  return apiRequest(`/perfis/${encodeURIComponent(profileId)}/`, {
-    method: "PATCH",
-    body: JSON.stringify({ pontos }),
+export function spendProfilePoint(profileId) {
+  return apiRequest(`/perfis/${encodeURIComponent(profileId)}/spend-point/`, {
+    method: "POST",
   });
 }

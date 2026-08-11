@@ -27,7 +27,7 @@ import {
 import { resetExerciseSet } from "../features/exerciseSets/services/exerciseSetsApi";
 import {
   fetchProfileByUsername,
-  updateProfilePoints,
+  spendProfilePoint,
 } from "../features/profiles/services/profilesApi";
 import { showCompletionInterstitial } from "../services/interstitialAd";
 import { useTheme } from "../theme";
@@ -108,6 +108,7 @@ export default function CategoryModuleScreen({
   const nextExerciseTimeout = useRef(null);
   const speechAnswerSubmitRef = useRef(null);
   const isSubmittingSpeechAnswer = useRef(false);
+  const completionPointsRef = useRef(null);
   const exerciseSetStartedAt = useRef(null);
   const submittedCardAccessIds = useRef(new Set());
   const progressAnimation = useRef(new Animated.Value(0)).current;
@@ -1155,6 +1156,8 @@ export default function CategoryModuleScreen({
   }
 
   async function completeCurrentExercise(payload) {
+    completionPointsRef.current = null;
+
     if (!selectedExercise?.id) {
       return null;
     }
@@ -1168,10 +1171,14 @@ export default function CategoryModuleScreen({
     }
 
     try {
-      return await completeExercise(selectedExercise.id, {
+      const result = await completeExercise(selectedExercise.id, {
         ...payload,
         duration_ms: Date.now() - (exerciseSetStartedAt.current || Date.now()),
       });
+      if (typeof result?.profile_points === "number") {
+        completionPointsRef.current = result.profile_points;
+      }
+      return result;
     } catch {
       setCorrectOptionId(null);
       setWrongOptionId(null);
@@ -1189,18 +1196,29 @@ export default function CategoryModuleScreen({
       return Number.POSITIVE_INFINITY;
     }
 
+    const serverPoints = completionPointsRef.current;
+    completionPointsRef.current = null;
+
+    if (typeof serverPoints === "number") {
+      const nextProfile = { ...profile, pontos: serverPoints };
+      setProfile(nextProfile);
+      onProfileChange?.(nextProfile);
+      setPointsError("");
+      return serverPoints;
+    }
+
     const nextPoints = Math.max(profile.pontos - 1, 0);
 
     try {
       setIsSpendingPoint(true);
-      const updatedProfile = await updateProfilePoints(profile.id, nextPoints);
+      const updatedProfile = await spendProfilePoint(profile.id);
       const nextProfile = updatedProfile || { ...profile, pontos: nextPoints };
 
       setProfile(nextProfile);
       onProfileChange?.(nextProfile);
       setPointsError("");
 
-      return nextPoints;
+      return nextProfile.pontos;
     } catch {
       setCorrectOptionId(null);
       setPointsError("Nao foi possivel atualizar seus pontos.");

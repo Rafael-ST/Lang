@@ -49,7 +49,7 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(data));
+    throw new Error(getApiErrorMessage(data, response.status));
   }
 
   return data;
@@ -238,17 +238,20 @@ function mergeTokenData(currentTokenData, refreshedTokenData) {
     };
   }
 
+  const {
+    refresh: _storedRefresh,
+    refreshToken: _storedRefreshToken,
+    refresh_token: _storedRefreshTokenSnakeCase,
+    ...safeCurrentTokenData
+  } = currentTokenData || {};
+
   return {
-    ...(currentTokenData || {}),
+    ...safeCurrentTokenData,
     ...refreshedTokenData,
     access:
       refreshedTokenData.access ||
       refreshedTokenData.access_token ||
       currentTokenData?.access,
-    refresh:
-      refreshedTokenData.refresh ||
-      refreshedTokenData.refresh_token ||
-      currentTokenData?.refresh,
   };
 }
 
@@ -360,30 +363,18 @@ function notifySessionExpired() {
 }
 
 function logAuthDebug(message) {
-  console.info(`[auth] ${message}`);
+  // Intentionally disabled: authentication details must not reach device logs.
 }
 
 function logAuthCookieDebug(path, response) {
-  let setCookieHeader = "";
-
-  try {
-    setCookieHeader =
-      response.headers?.get?.("set-cookie") ||
-      response.headers?.get?.("Set-Cookie") ||
-      "";
-  } catch {
-    setCookieHeader = "";
-  }
-
-  console.info(
-    `[auth] ${path} - Set-Cookie:`,
-    setCookieHeader || "(nao legivel pelo fetch; cookie HttpOnly fica fora do JS)"
-  );
+  // Intentionally disabled: Set-Cookie may contain a refresh token.
 }
 
-function getApiErrorMessage(data) {
+function getApiErrorMessage(data, statusCode) {
   if (!data) {
-    return "Erro ao acessar a API.";
+    return statusCode
+      ? `Erro ao acessar a API (HTTP ${statusCode}).`
+      : "Erro ao acessar a API.";
   }
 
   if (typeof data === "string") {
