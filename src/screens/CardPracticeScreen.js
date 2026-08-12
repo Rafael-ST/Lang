@@ -3,6 +3,7 @@ import { useAudioPlayer } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ScreenContainer from "../components/ScreenContainer";
 import { showPracticeCategoryInterstitial } from "../services/interstitialAd";
@@ -10,7 +11,12 @@ import { useTheme } from "../theme";
 
 export default function CardPracticeScreen({ category, onBack, onComplete, soundEnabled = true }) {
   const { colors, shadows } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = createStyles(colors, shadows);
+  const containerStyle = [
+    styles.container,
+    { paddingBottom: Math.max(insets.bottom + 16, 32) },
+  ];
   const [index, setIndex] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
   const progressAnimation = useRef(new Animated.Value(0)).current;
@@ -70,7 +76,7 @@ export default function CardPracticeScreen({ category, onBack, onComplete, sound
 
   if (!card) {
     return (
-      <ScreenContainer contentStyle={styles.container}>
+      <ScreenContainer contentStyle={containerStyle}>
         <Text style={styles.helperText}>Nenhum card disponível.</Text>
         <Pressable style={styles.secondaryButton} onPress={onBack}>
           <Text style={styles.secondaryButtonText}>Voltar</Text>
@@ -80,7 +86,7 @@ export default function CardPracticeScreen({ category, onBack, onComplete, sound
   }
 
   return (
-    <ScreenContainer contentStyle={styles.container}>
+    <ScreenContainer contentStyle={containerStyle}>
       <View style={styles.topRow}>
         <Pressable accessibilityLabel="Voltar" style={styles.iconButton} onPress={onBack}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />

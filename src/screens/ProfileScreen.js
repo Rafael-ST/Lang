@@ -334,7 +334,7 @@ export default function ProfileScreen({ onUserChange }) {
 
 function createStyles(colors, shadows) {
   return StyleSheet.create({
-    container: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 110 },
+    container: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 152 },
     header: { marginBottom: 28 },
     badge: { alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.badgeBackground, color: colors.badgeText, fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 },
     title: { fontSize: 36, fontWeight: "800", color: colors.textPrimary, marginBottom: 8 },
