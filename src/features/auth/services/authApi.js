@@ -25,3 +25,23 @@ export function logoutUser(refresh) {
     body: JSON.stringify(refresh ? { refresh } : {}),
   });
 }
+
+export function requestPasswordReset(email) {
+  return apiRequest("/auth/password-reset/request/", {
+    method: "POST",
+    skipAuth: true,
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function confirmPasswordReset({ email, code, newPassword }) {
+  return apiRequest("/auth/password-reset/confirm/", {
+    method: "POST",
+    skipAuth: true,
+    body: JSON.stringify({
+      email,
+      code,
+      new_password: newPassword,
+    }),
+  });
+}
