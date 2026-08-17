@@ -6,6 +6,7 @@ import AppTextField from "../components/AppTextField";
 import GoogleButton from "../components/GoogleButton";
 import ScreenContainer from "../components/ScreenContainer";
 import { useAuth } from "../features/auth/context/AuthContext";
+import { openPrivacyPolicy } from "../services/legalLinks";
 import { useTheme } from "../theme";
 
 export default function LoginScreen({
@@ -110,6 +111,18 @@ export default function LoginScreen({
         ) : null}
 
         {authError ? <Text style={styles.errorText}>{authError}</Text> : null}
+
+        <Pressable
+          accessibilityLabel="Abrir Política de Privacidade"
+          accessibilityRole="link"
+          onPress={openPrivacyPolicy}
+          style={styles.privacyButton}
+        >
+          <Text style={styles.privacyText}>
+            Ao continuar, você concorda com nossa{" "}
+            <Text style={styles.privacyLink}>Política de Privacidade</Text>.
+          </Text>
+        </Pressable>
       </View>
     </ScreenContainer>
   );
@@ -204,6 +217,22 @@ function createStyles(colors, shadows) {
     fontSize: 13,
     lineHeight: 20,
     textAlign: "center",
+  },
+  privacyButton: {
+    alignSelf: "center",
+    marginTop: 20,
+    paddingVertical: 4,
+  },
+  privacyText: {
+    color: colors.textMutedDark,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  privacyLink: {
+    color: colors.link,
+    fontWeight: "800",
+    textDecorationLine: "underline",
   },
   });
 }

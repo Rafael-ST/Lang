@@ -15,6 +15,7 @@ import {
 } from "../features/users/services/usersApi";
 import { useAuth } from "../features/auth/context/AuthContext";
 import { fetchProfileByUsername } from "../features/profiles/services/profilesApi";
+import { openPrivacyPolicy } from "../services/legalLinks";
 import { useTheme } from "../theme";
 
 export default function ProfileScreen({ onUserChange }) {
@@ -309,6 +310,26 @@ export default function ProfileScreen({ onUserChange }) {
         />
         {message ? <Text style={[styles.message, isError ? styles.error : styles.success]}>{message}</Text> : null}
       </View>
+      <Pressable
+        accessibilityLabel="Abrir Política de Privacidade"
+        accessibilityRole="link"
+        onPress={openPrivacyPolicy}
+        style={({ pressed }) => [
+          styles.privacyCard,
+          pressed && styles.privacyCardPressed,
+        ]}
+      >
+        <View style={styles.privacyIcon}>
+          <Ionicons name="shield-checkmark-outline" size={24} color={colors.link} />
+        </View>
+        <View style={styles.privacyContent}>
+          <Text style={styles.privacyTitle}>Política de Privacidade</Text>
+          <Text style={styles.privacyDescription}>
+            Saiba como seus dados são utilizados e protegidos.
+          </Text>
+        </View>
+        <Ionicons name="open-outline" size={20} color={colors.textMutedDark} />
+      </Pressable>
       <View style={styles.dangerCard}>
         <Text style={styles.dangerTitle}>Encerrar conta</Text>
         <Text style={styles.dangerDescription}>
@@ -446,6 +467,41 @@ function createStyles(colors, shadows) {
     message: { marginTop: 14, textAlign: "center", fontSize: 14, fontWeight: "700" },
     error: { color: colors.error },
     success: { color: colors.success },
+    privacyCard: {
+      minHeight: 86,
+      marginTop: 24,
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceMuted,
+      ...shadows.soft,
+    },
+    privacyCardPressed: { opacity: 0.7 },
+    privacyIcon: {
+      width: 46,
+      height: 46,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+    },
+    privacyContent: { flex: 1 },
+    privacyTitle: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: "900",
+    },
+    privacyDescription: {
+      marginTop: 4,
+      color: colors.textMutedDark,
+      fontSize: 13,
+      lineHeight: 18,
+    },
     dangerCard: {
       marginTop: 24,
       padding: 24,

@@ -5,6 +5,7 @@ import AppButton from "../components/AppButton";
 import AppTextField from "../components/AppTextField";
 import ScreenContainer from "../components/ScreenContainer";
 import { createUser } from "../features/users/services/usersApi";
+import { openPrivacyPolicy } from "../services/legalLinks";
 import { useTheme } from "../theme";
 
 export default function RegisterScreen({ onBack, onRegisterPress }) {
@@ -128,6 +129,18 @@ export default function RegisterScreen({ onBack, onRegisterPress }) {
           <Text style={styles.errorText}>{registerError}</Text>
         ) : null}
 
+        <Pressable
+          accessibilityLabel="Abrir Política de Privacidade"
+          accessibilityRole="link"
+          onPress={openPrivacyPolicy}
+          style={styles.privacyButton}
+        >
+          <Text style={styles.privacyText}>
+            Ao criar sua conta, você declara que leu nossa{" "}
+            <Text style={styles.privacyLink}>Política de Privacidade</Text>.
+          </Text>
+        </Pressable>
+
         <Pressable style={styles.linkButton} onPress={onBack}>
           <Text style={styles.linkText}>Já tenho uma conta</Text>
         </Pressable>
@@ -192,6 +205,22 @@ function createStyles(colors, shadows) {
     fontSize: 13,
     lineHeight: 20,
     textAlign: "center",
+  },
+  privacyButton: {
+    alignSelf: "center",
+    marginTop: 18,
+    paddingVertical: 4,
+  },
+  privacyText: {
+    color: colors.textMutedDark,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  privacyLink: {
+    color: colors.link,
+    fontWeight: "800",
+    textDecorationLine: "underline",
   },
   });
 }
