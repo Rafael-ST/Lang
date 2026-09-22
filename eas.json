@@ -6,7 +6,11 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://langbackend-production.up.railway.app/api/v1",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://langbackend-production.up.railway.app/politica-de-privacidade/"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -14,12 +18,16 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "http://18.229.113.88/api/v1",
-        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "http://18.229.113.88/politica-de-privacidade/"
+        "EXPO_PUBLIC_API_BASE_URL": "https://langbackend-production.up.railway.app/api/v1",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://langbackend-production.up.railway.app/politica-de-privacidade/"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://langbackend-production.up.railway.app/api/v1",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://langbackend-production.up.railway.app/politica-de-privacidade/"
+      }
     }
   },
   "submit": {

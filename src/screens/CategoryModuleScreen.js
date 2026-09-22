@@ -30,6 +30,7 @@ import {
   spendProfilePoint,
 } from "../features/profiles/services/profilesApi";
 import { showCompletionInterstitial } from "../services/interstitialAd";
+import { playAudio } from "../services/audioPlayback";
 import { useTheme } from "../theme";
 
 const EXERCISE_TYPES = {
@@ -2159,18 +2160,6 @@ export default function CategoryModuleScreen({
   );
 }
 
-function playAudio(player) {
-  try {
-    player
-      .seekTo(0)
-      .then(() => player.play())
-      .catch(() => player.play());
-  } catch (error) {
-    // Audio feedback is optional; the exercise flow should continue if playback fails.
-    console.warn("[audio] Nao foi possivel tocar o audio:", error);
-  }
-}
-
 function ClickableEnglishText({
   exerciseId,
   firstSeenCardExerciseIds,
@@ -2458,6 +2447,24 @@ function getAudioUri(exercise) {
   const promptAudioUri =
     prompt && typeof prompt === "object" ? prompt.audio_url : "";
   const cardAudioUri = card?.audio_url || card?.audio || "";
+
+  // The builder can persist a signed S3 URL in the prompt. Prefer the fresh
+  // signature returned with the card when both URLs identify the same file.
+  if (promptAudioUri && cardAudioUri) {
+    try {
+      const promptUrl = new URL(promptAudioUri);
+      const cardUrl = new URL(cardAudioUri);
+      if (
+        promptUrl.searchParams.has("X-Amz-Signature") &&
+        promptUrl.origin === cardUrl.origin &&
+        promptUrl.pathname === cardUrl.pathname
+      ) {
+        return replaceLocalhostOrigin(cardAudioUri);
+      }
+    } catch {
+      // Relative and legacy URLs are handled below.
+    }
+  }
 
   if (isLocalhostUri(promptAudioUri) && !isLocalhostUri(cardAudioUri)) {
     return cardAudioUri || replaceLocalhostOrigin(promptAudioUri);

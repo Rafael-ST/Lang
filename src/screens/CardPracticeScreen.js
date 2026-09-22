@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ScreenContainer from "../components/ScreenContainer";
 import { showPracticeCategoryInterstitial } from "../services/interstitialAd";
+import { playAudio } from "../services/audioPlayback";
 import { useTheme } from "../theme";
 
 export default function CardPracticeScreen({ category, onBack, onComplete, soundEnabled = true }) {
@@ -27,18 +28,13 @@ export default function CardPracticeScreen({ category, onBack, onComplete, sound
     inputRange: [0, 100],
     outputRange: ["0%", "100%"],
   });
-  const audioPlayer = useAudioPlayer(null, { keepAudioSessionActive: true });
+  const audioUri = card?.audio_url || card?.audio || null;
+  const audioPlayer = useAudioPlayer(audioUri, { keepAudioSessionActive: true });
 
   useEffect(() => {
-    if (!soundEnabled || !card?.audio) return;
-
-    try {
-      audioPlayer.replace({ uri: card.audio });
-      audioPlayer.play();
-    } catch {
-      // A apresentação continua normalmente quando o áudio está indisponível.
-    }
-  }, [audioPlayer, card?.audio, soundEnabled]);
+    if (!soundEnabled || !audioUri) return;
+    playAudio(audioPlayer);
+  }, [audioPlayer, audioUri, soundEnabled]);
 
   useEffect(() => {
     const animation = Animated.spring(progressAnimation, {
@@ -53,13 +49,8 @@ export default function CardPracticeScreen({ category, onBack, onComplete, sound
   }, [progressAnimation, progressPercent]);
 
   function playCardAudio() {
-    if (!card?.audio) return;
-    try {
-      audioPlayer.replace({ uri: card.audio });
-      audioPlayer.play();
-    } catch {
-      // O botão de avançar permanece disponível.
-    }
+    if (!audioUri) return;
+    playAudio(audioPlayer);
   }
 
   async function handleNext() {
