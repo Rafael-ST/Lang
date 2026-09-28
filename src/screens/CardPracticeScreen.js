@@ -108,11 +108,7 @@ export default function CardPracticeScreen({ category, onBack, onComplete, sound
       <View style={styles.presentationCard}>
         {card.image ? (
           <Image source={{ uri: card.image }} resizeMode="cover" style={styles.image} />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Ionicons name="image-outline" size={48} color={colors.textMuted} />
-          </View>
-        )}
+        ) : null}
 
         <Text style={styles.englishText}>{card.english_name}</Text>
         <Text style={styles.translationText}>{card.international_name}</Text>
@@ -150,7 +146,6 @@ function createStyles(colors, shadows) {
     progressGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 999 },
     presentationCard: { flex: 1, alignItems: "center", justifyContent: "center", marginVertical: 24, padding: 22, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted, ...shadows.soft },
     image: { width: "100%", maxWidth: 360, height: 230, borderRadius: 20, marginBottom: 24 },
-    imagePlaceholder: { width: "100%", maxWidth: 360, height: 180, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, marginBottom: 24 },
     englishText: { color: colors.textPrimary, fontSize: 34, fontWeight: "900", textAlign: "center" },
     translationText: { color: colors.textMutedDark, fontSize: 19, fontWeight: "700", textAlign: "center", marginTop: 10 },
     audioButton: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, marginTop: 22 },

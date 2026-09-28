@@ -27,7 +27,9 @@ export default function AppTextField({
           placeholderTextColor={colors.textMuted}
           secureTextEntry={isSecureField && !isPasswordVisible}
           keyboardType={keyboardType}
-          autoCapitalize={autoCapitalize}
+          autoCapitalize={isSecureField ? "none" : autoCapitalize}
+          autoCorrect={isSecureField ? false : undefined}
+          spellCheck={isSecureField ? false : undefined}
           value={value}
           onChangeText={onChangeText}
           style={[styles.input, isSecureField && styles.inputWithAction]}
